@@ -8,8 +8,11 @@ using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper;
 using MFAAvalonia.ViewModels.Windows;
 using MFAAvalonia.Views.Windows;
+using Avalonia.VisualTree;
+using MFAAvalonia.Views.Mobile;
 using System;
 using System.IO;
+using System.Linq;
 
 namespace MFAAvalonia.Views.UserControls.Settings;
 
@@ -23,7 +26,14 @@ public partial class AboutUserControl : UserControl
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
     private void Button_OnClick(object? sender, RoutedEventArgs e)
     {
-        FileLogExporter.CompressRecentLogs(Instances.RootView.StorageProvider);
+        var storageProvider = Instances.StorageProvider;
+        if (storageProvider == null)
+        {
+            ToastHelper.Warn(LangKeys.Warning.ToLocalization(), LangKeys.PlatformNotSupportedOperation.ToLocalization());
+            return;
+        }
+
+        FileLogExporter.CompressRecentLogs(storageProvider);
     }
     
     private void DisplayAnnouncement(object? sender, RoutedEventArgs e)
@@ -41,7 +51,10 @@ public partial class AboutUserControl : UserControl
             return;
         }
 
-        MaaProcessor.Instance.SetTasker();
+        foreach (var processor in MaaProcessor.Processors)
+        {
+            processor.SetTasker();
+        }
 
         var baseDirectory = AppContext.BaseDirectory;
         var debugDirectory = Path.Combine(baseDirectory, "debug");
@@ -96,6 +109,12 @@ public partial class AboutUserControl : UserControl
         {
             LicenseView.ShowLicense(viewModel.ResourceLicense);
         }
+    }
+
+    private void StartTutorial_Click(object? sender, RoutedEventArgs e)
+    {
+        var rootContent = this.GetVisualAncestors().OfType<RootViewContent>().FirstOrDefault();
+        rootContent?.TryStartTutorial();
     }
 }
 

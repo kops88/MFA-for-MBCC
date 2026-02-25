@@ -72,8 +72,17 @@ public partial class MaaInterface
         private void UpdateDisplayName()
         {
             DisplayName = LanguageHelper.GetLocalizedDisplayName(Label, Name ?? string.Empty);
-            DisplayDescription = LanguageHelper.GetLocalizedString(Description.ResolveContentAsync().Result);
-            HasDescription = !string.IsNullOrWhiteSpace(DisplayDescription);
+            try
+            {
+                DisplayDescription = LanguageHelper.GetLocalizedString(Description.ResolveContentAsync().Result);
+                HasDescription = !string.IsNullOrWhiteSpace(DisplayDescription);
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Warning($"Failed to resolve option case description for '{Name}': {ex.Message}");
+                DisplayDescription = string.Empty;
+                HasDescription = false;
+            }
             UpdateIcon();
         }
 
@@ -440,7 +449,13 @@ public partial class MaaInterface
             var input = Inputs?.FirstOrDefault(i => i.Name == inputName);
             if (input == null) return (true, null);
 
-            if (string.IsNullOrEmpty(input.Verify)) return (true, null);
+            if (string.IsNullOrEmpty(input.Verify))
+            {
+                // 默认验证：不为空
+                if (string.IsNullOrWhiteSpace(value))
+                    return (false, input.PatternMsg ?? $"{LanguageHelper.GetLocalizedDisplayName(input.Label, input.Name ?? string.Empty)}");
+                return (true, null);
+            }
 
             try
             {
@@ -457,6 +472,35 @@ public partial class MaaInterface
             }
 
             return (true, null);
+        }
+
+        /// <summary>
+        /// 验证所有输入字段
+        /// </summary>
+        public (bool IsValid, string? ErrorMessage) ValidateAllInputs(Dictionary<string, string?>? data)
+        {
+            if (!IsInput || Inputs == null) return (true, null);
+
+            foreach (var input in Inputs)
+            {
+                if (string.IsNullOrEmpty(input.Name)) continue;
+                var value = data != null && data.TryGetValue(input.Name, out var v) ? v ?? string.Empty : string.Empty;
+                var result = ValidateInput(input.Name, value);
+                if (!result.IsValid) return result;
+            }
+            return (true, null);
+        }
+
+        public void Merge(MaaInterfaceOption other)
+        {
+             if (other == null) return;
+             if (!string.IsNullOrEmpty(other.Label)) Label = other.Label;
+             if (!string.IsNullOrEmpty(other.Description)) Description = other.Description;
+             if (!string.IsNullOrEmpty(other.Icon)) Icon = other.Icon;
+             if (other.Cases != null) Cases = other.Cases;
+             if (other.Inputs != null) Inputs = other.Inputs;
+             if (other.PipelineOverride != null) PipelineOverride = other.PipelineOverride;
+             if (!string.IsNullOrEmpty(other.DefaultCase)) DefaultCase = other.DefaultCase;
         }
     }
 
@@ -531,6 +575,12 @@ public partial class MaaInterface
         /// <summary>任务显示名称，用于在用户界面中展示。支持国际化字符串（以$开头）。如果未设置，则显示 Name 字段的值。</summary>
         [JsonProperty("label")] public string? Label;
 
+        /// <summary>任务显示名称覆盖（仅配置文件使用，不影响接口定义）</summary>
+        [JsonProperty("display_name_override")] public string? DisplayNameOverride;
+
+        /// <summary>任务备注（仅配置文件使用，不影响接口定义）</summary>
+        [JsonProperty("remark")] public string? Remark;
+
         /// <summary>任务入口，为 pipeline 中 Task 的名称</summary>
         [JsonProperty("entry")] public string? Entry;
 
@@ -555,6 +605,16 @@ public partial class MaaInterface
         /// </summary>
         [JsonConverter(typeof(GenericSingleOrListConverter<string>))] [JsonProperty("resource")]
         public List<string>? Resource;
+
+        /// <summary>
+        /// 可选。指定该任务支持的控制器类型列表。
+        /// 数组元素应与 controller 配置中的 name 字段对应。
+        /// 若不指定，则表示该任务在所有控制器类型中都可用。
+        /// 当用户选择了某个控制器时，只有支持该控制器的任务才会显示在用户界面中供选择。
+        /// 这允许为不同控制器类型提供专门的任务配置，比如某些任务只适用于 Adb 控制器，某些任务只适用于 Win32 控制器。
+        /// </summary>
+        [JsonConverter(typeof(GenericSingleOrListConverter<string>))] [JsonProperty("controller")]
+        public List<string>? Controller;
 
         /// <summary>文档说明（旧版兼容）</summary>
         [JsonConverter(typeof(GenericSingleOrListConverter<string>))] [JsonProperty("doc")]
@@ -625,6 +685,27 @@ public partial class MaaInterface
         public MaaInterfaceTask Clone()
         {
             return JsonConvert.DeserializeObject<MaaInterfaceTask>(ToString()) ?? new MaaInterfaceTask();
+        }
+
+        public void Merge(MaaInterfaceTask other)
+        {
+             if (other == null) return;
+             // Name is essentially the key, so we don't need to merge it if we found it by key
+             if (!string.IsNullOrEmpty(other.Label)) Label = other.Label;
+             if (!string.IsNullOrEmpty(other.DisplayNameOverride)) DisplayNameOverride = other.DisplayNameOverride;
+             if (!string.IsNullOrEmpty(other.Remark)) Remark = other.Remark;
+             if (!string.IsNullOrEmpty(other.Entry)) Entry = other.Entry;
+             if (other.Check != null) Check = other.Check;
+             if (!string.IsNullOrEmpty(other.Description)) Description = other.Description;
+             if (!string.IsNullOrEmpty(other.Icon)) Icon = other.Icon;
+             if (other.Resource != null) Resource = other.Resource;
+             if (other.Controller != null) Controller = other.Controller;
+             if (other.Document != null) Document = other.Document;
+             if (other.Repeatable != null) Repeatable = other.Repeatable;
+             if (other.RepeatCount != null) RepeatCount = other.RepeatCount;
+             if (other.Advanced != null) Advanced = other.Advanced;
+             if (other.Option != null) Option = other.Option;
+             if (other.PipelineOverride != null) PipelineOverride = other.PipelineOverride;
         }
     }
 
@@ -705,8 +786,17 @@ public partial class MaaInterface
         private void UpdateDisplayName()
         {
             DisplayName = LanguageHelper.GetLocalizedDisplayName(Label, Name ?? string.Empty);
-            DisplayDescription = LanguageHelper.GetLocalizedString(Description.ResolveContentAsync().Result);
-            HasDescription = !string.IsNullOrWhiteSpace(DisplayDescription);
+            try
+            {
+                DisplayDescription = LanguageHelper.GetLocalizedString(Description.ResolveContentAsync().Result);
+                HasDescription = !string.IsNullOrWhiteSpace(DisplayDescription);
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Warning($"Failed to resolve resource description for '{Name}': {ex.Message}");
+                DisplayDescription = string.Empty;
+                HasDescription = false;
+            }
             UpdateIcon();
         }
 
@@ -774,6 +864,37 @@ public partial class MaaInterface
         public object? ScreenCap { get; set; }
     }
 
+    /// <summary>
+    /// Gamepad 控制器的具体配置（仅 Windows）。
+    /// 用于创建虚拟游戏手柄进行游戏控制。需要安装 ViGEm Bus Driver。
+    /// </summary>
+    public class MaaResourceControllerGamepad
+    {
+        /// <summary>
+        /// 可选。Win32 控制器搜索窗口类名使用的正则表达式。
+        /// </summary>
+        [JsonProperty("class_regex")]
+        public string? ClassRegex { get; set; }
+
+        /// <summary>
+        /// 可选。Win32 控制器搜索窗口标题使用的正则表达式。
+        /// </summary>
+        [JsonProperty("window_regex")]
+        public string? WindowRegex { get; set; }
+
+        /// <summary>
+        /// 可选。虚拟手柄类型，取值为 Xbox360、DualShock4（或 DS4）。不提供则默认使用 Xbox360。
+        /// </summary>
+        [JsonProperty("gamepad_type")]
+        public string? GamepadType { get; set; }
+
+        /// <summary>
+        /// 可选。截图方式，不提供则使用默认。仅当配置了窗口正则时有效。
+        /// </summary>
+        [JsonProperty("screencap")]
+        public object? ScreenCap { get; set; }
+    }
+
     public class MaaInterfaceAgent
     {
         [JsonProperty("child_exec")]
@@ -814,12 +935,21 @@ public partial class MaaInterface
         [JsonProperty("display_raw")]
         public bool? DisplayRaw { get; set; }
 
+        [JsonProperty("permission_required")]
+        public bool? PermissionRequired { get; set; }
+        
+        [JsonConverter(typeof(GenericSingleOrListConverter<string>))]
+        [JsonProperty("attach_resource_path")]
+        public List<string>? AttachResourcePath { get; set; }
+        
         [JsonProperty("adb")]
         public MaaResourceControllerAdb? Adb { get; set; }
         [JsonProperty("win32")]
         public MaaResourceControllerWin32? Win32 { get; set; }
         [JsonProperty("playcover")]
         public MaaResourceControllerPlayCover? PlayCover { get; set; }
+        [JsonProperty("gamepad")]
+        public MaaResourceControllerGamepad? Gamepad { get; set; }
 
         /// <summary>显示名称（用于 UI 绑定）</summary>
         [ObservableProperty] [JsonIgnore] private string _displayName = string.Empty;
@@ -869,8 +999,17 @@ public partial class MaaInterface
                 DisplayName = ControllerType.ToResourceKey().ToLocalization();
             }
 
-            DisplayDescription = LanguageHelper.GetLocalizedString(Description.ResolveContentAsync().Result);
-            HasDescription = !string.IsNullOrWhiteSpace(DisplayDescription);
+            try
+            {
+                DisplayDescription = LanguageHelper.GetLocalizedString(Description.ResolveContentAsync().Result);
+                HasDescription = !string.IsNullOrWhiteSpace(DisplayDescription);
+            }
+            catch (Exception ex)
+            {
+                LoggerHelper.Warning($"Failed to resolve controller description for '{Name}': {ex.Message}");
+                DisplayDescription = string.Empty;
+                HasDescription = false;
+            }
 
             UpdateIcon();
         }
@@ -894,6 +1033,10 @@ public partial class MaaInterface
 
     [JsonProperty("interface_version")]
     public int? InterfaceVersion { get; set; }
+
+    [JsonProperty("import")]
+    [JsonConverter(typeof(GenericSingleOrListConverter<string>))]
+    public List<string>? Import { get; set; }
 
     /// <summary>
     /// 多语言支持配置，键为语言代码，值为对应的翻译文件路径（相对于 interface.json 同目录）
@@ -955,7 +1098,8 @@ public partial class MaaInterface
     public List<MaaInterfaceTask>? Task { get; set; }
 
     [JsonProperty("agent")]
-    public MaaInterfaceAgent? Agent { get; set; }
+    [JsonConverter(typeof(GenericSingleOrListConverter<MaaInterfaceAgent>))]
+    public List<MaaInterfaceAgent>? Agent { get; set; }
 
     [JsonProperty("advanced")]
     public Dictionary<string, MaaInterfaceAdvancedOption>? Advanced { get; set; }
@@ -1104,6 +1248,135 @@ public partial class MaaInterface
         return sb.ToString();
     }
 
+    /// <summary>
+    /// 将另一个 MaaInterface 合并到当前实例中 (传入的 other 实例优先级更高，会覆盖当前实例的同名字段)
+    /// </summary>
+    public void Merge(MaaInterface? other)
+    {
+        if (other == null) return;
+
+        if (other.InterfaceVersion != null) InterfaceVersion = other.InterfaceVersion;
+        if (!string.IsNullOrEmpty(other.RID)) RID = other.RID;
+        if (other.Multiplatform != null) Multiplatform = other.Multiplatform;
+        if (!string.IsNullOrEmpty(other.Name)) Name = other.Name;
+        if (!string.IsNullOrEmpty(other.Label)) Label = other.Label;
+        if (!string.IsNullOrEmpty(other.Version)) Version = other.Version;
+        if (!string.IsNullOrEmpty(other.MFAMaxVersion)) MFAMaxVersion = other.MFAMaxVersion;
+        if (!string.IsNullOrEmpty(other.MFAMinVersion)) MFAMinVersion = other.MFAMinVersion;
+        if (!string.IsNullOrEmpty(other.Welcome)) Welcome = other.Welcome;
+        if (!string.IsNullOrEmpty(other.Message)) Message = other.Message;
+        if (!string.IsNullOrEmpty(other.Github)) Github = other.Github;
+        if (!string.IsNullOrEmpty(other.Url)) Url = other.Url;
+        if (!string.IsNullOrEmpty(other.Title)) Title = other.Title;
+        if (!string.IsNullOrEmpty(other.CustomTitle)) CustomTitle = other.CustomTitle;
+        if (!string.IsNullOrEmpty(other.DefaultController)) DefaultController = other.DefaultController;
+        if (other.LockController) LockController = other.LockController;
+        if (!string.IsNullOrEmpty(other.Contact)) Contact = other.Contact;
+        if (!string.IsNullOrEmpty(other.Description)) Description = other.Description;
+        if (!string.IsNullOrEmpty(other.License)) License = other.License;
+        if (other.Agent is { Count: > 0 }) Agent = other.Agent;
+
+        Advanced = MergeDictionaries(Advanced, other.Advanced);
+        Option = MergeDictionaries(Option, other.Option);
+        Languages = MergeDictionaries(Languages, other.Languages);
+        
+        // Merge AdditionalData
+        if (other.AdditionalData != null)
+        {
+            foreach (var kvp in other.AdditionalData)
+            {
+                AdditionalData[kvp.Key] = kvp.Value;
+            }
+        }
+
+        Controller = MergeLists(Controller, other.Controller, c => c.Name);
+        Resource = MergeLists(Resource, other.Resource, r => r.Name);
+        Task = MergeTasks(Task, other.Task);
+    }
+
+    private static Dictionary<TK, TV>? MergeDictionaries<TK, TV>(Dictionary<TK, TV>? first, Dictionary<TK, TV>? second) where TK : notnull
+    {
+        if (first == null && second == null) return null;
+        if (first == null) return new Dictionary<TK, TV>(second!);
+        if (second == null) return new Dictionary<TK, TV>(first);
+
+        var result = new Dictionary<TK, TV>(first);
+        foreach (var kvp in second)
+        {
+            if (typeof(TV) == typeof(MaaInterfaceOption) && result.TryGetValue(kvp.Key, out var existingVal) && existingVal is MaaInterfaceOption opt1 && kvp.Value is MaaInterfaceOption opt2)
+            {
+                opt1.Merge(opt2);
+            }
+            else
+            {
+                result[kvp.Key] = kvp.Value;
+            }
+        }
+        return result;
+    }
+
+    private static List<MaaInterfaceTask>? MergeTasks(List<MaaInterfaceTask>? first, List<MaaInterfaceTask>? second)
+    {
+        if (first == null && second == null) return null;
+        if (first == null) return new List<MaaInterfaceTask>(second!);
+        if (second == null) return new List<MaaInterfaceTask>(first);
+
+        // 深拷贝一份 first
+        var result = first.Select(t => t.Clone()).ToList();
+
+        foreach (var item in second)
+        {
+            var key = item.Name;
+            if (!string.IsNullOrEmpty(key))
+            {
+                var existingItem = result.FirstOrDefault(i => i.Name == key);
+                if (existingItem != null)
+                {
+                    existingItem.Merge(item);
+                }
+                else
+                {
+                    result.Add(item);
+                }
+            }
+            else
+            {
+                result.Add(item);
+            }
+        }
+        return result;
+    }
+
+    private static List<T>? MergeLists<T>(List<T>? first, List<T>? second, Func<T, string?> keySelector)
+    {
+        if (first == null && second == null) return null;
+        if (first == null) return new List<T>(second!);
+        if (second == null) return new List<T>(first);
+
+        var result = new List<T>(first);
+        
+        foreach (var item in second)
+        {
+            var key = keySelector(item);
+            if (!string.IsNullOrEmpty(key))
+            {
+                var index = result.FindIndex(i => keySelector(i) == key);
+                if (index >= 0)
+                {
+                    result[index] = item;
+                }
+                else
+                {
+                    result.Add(item);
+                }
+            }
+            else
+            {
+                result.Add(item);
+            }
+        }
+        return result;
+    }
 
     public override string? ToString()
     {

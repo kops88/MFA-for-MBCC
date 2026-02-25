@@ -1,4 +1,7 @@
 ﻿using Avalonia.Collections;
+using MFAAvalonia;
+using MFAAvalonia.Extensions;
+using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.Converters;
 using Newtonsoft.Json;
@@ -8,6 +11,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace MFAAvalonia.Configuration;
 
@@ -18,12 +22,15 @@ public static class ConfigurationManager
         "config");
     public static readonly MFAConfiguration Maa = new("Maa", "maa_option", new Dictionary<string, object>());
     public static MFAConfiguration Current = new("Default", "config", new Dictionary<string, object>());
+    public static InstanceConfiguration CurrentInstance => MaaProcessorManager.Instance?.Current?.InstanceConfiguration ?? new InstanceConfiguration("Default");
 
     public static AvaloniaList<MFAConfiguration> Configs { get; } = LoadConfigurations();
 
     public static event Action<string>? ConfigurationSwitched;
 
     public static bool IsSwitching { get; private set; }
+    private static readonly object _switchLock = new();
+    private static string? _pendingSwitchName;
 
     public static string ConfigName { get; set; }
     public static string GetCurrentConfiguration() => ConfigName;
@@ -42,6 +49,11 @@ public static class ConfigurationManager
 
     public static void SwitchConfiguration(string? name)
     {
+        _ = SwitchConfigurationAsync(name);
+    }
+
+    private static async Task SwitchConfigurationAsync(string? name)
+    {
         if (string.IsNullOrWhiteSpace(name))
             return;
 
@@ -54,34 +66,78 @@ public static class ConfigurationManager
             return;
         }
 
-        void ApplySwitch()
+        lock (_switchLock)
         {
+            if (IsSwitching)
+            {
+                _pendingSwitchName = name;
+                return;
+            }
             IsSwitching = true;
-            try
+        }
+
+        if (Instances.RootViewModel.IsRunning)
+        {
+            ToastHelper.Warn(LangKeys.SwitchConfiguration.ToLocalization());
+            lock (_switchLock)
+            {
+                IsSwitching = false;
+            }
+            return;
+        }
+
+        await DispatcherHelper.RunOnMainThreadAsync(() =>
+        {
+            Instances.RootViewModel.SetConfigSwitchingState(true);
+            Instances.RootViewModel.SetConfigSwitchProgress(5);
+        });
+        await Task.Run(() => MaaProcessorManager.Instance.Current.SetTasker());
+        await Task.Delay(60);
+
+        try
+        {
+            DispatcherHelper.PostOnMainThread(() => Instances.RootViewModel.SetConfigSwitchProgress(25));
+
+            var config = Configs.First(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            var configData = await Task.Run(() => JsonHelper.LoadConfig(config.FileName, new Dictionary<string, object>()));
+
+            await DispatcherHelper.RunOnMainThreadAsync(() =>
             {
                 SetDefaultConfig(name);
                 ConfigName = name;
-
-                var config = Configs.First(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-                config.SetConfig(JsonHelper.LoadConfig(config.FileName, new Dictionary<string, object>()));
+                config.SetConfig(configData);
                 Current = config;
+                Instances.RootViewModel.SetConfigSwitchProgress(55);
+            });
 
-                ConfigurationSwitched?.Invoke(name);
-                Instances.ReloadConfigurationForSwitch();
-            }
-            finally
+            await DispatcherHelper.RunOnMainThreadAsync(() => ConfigurationSwitched?.Invoke(name));
+            await Instances.ReloadConfigurationForSwitchAsync();
+
+            DispatcherHelper.PostOnMainThread(() => Instances.RootViewModel.SetConfigSwitchProgress(98));
+        }
+        finally
+        {
+            await DispatcherHelper.RunOnMainThreadAsync(() => Instances.RootViewModel.SetConfigSwitchProgress(100));
+            await Task.Delay(120);
+            DispatcherHelper.PostOnMainThread(() => Instances.RootViewModel.SetConfigSwitchingState(false));
+
+            lock (_switchLock)
             {
                 IsSwitching = false;
             }
         }
 
-        if (Instances.RootViewModel.IsRunning)
+        string? pending;
+        lock (_switchLock)
         {
-            Instances.TaskQueueViewModel.StopTask(ApplySwitch);
-            return;
+            pending = _pendingSwitchName;
+            _pendingSwitchName = null;
         }
 
-        ApplySwitch();
+        if (!string.IsNullOrWhiteSpace(pending) && !pending.Equals(ConfigName, StringComparison.OrdinalIgnoreCase))
+        {
+            await SwitchConfigurationAsync(pending);
+        }
     }
 
     public static void SetDefaultConfig(string? name)
@@ -127,11 +183,6 @@ public static class ConfigurationManager
 
         Maa.SetConfig(JsonHelper.LoadConfig("maa_option", new Dictionary<string, object>()));
 
-        if (Program.Args.TryGetValue("c", out var param) && !string.IsNullOrEmpty(param))
-        {
-            if (collection.Any(c => c.Name == param))
-                ConfigName = param;
-        }
         Current = collection.FirstOrDefault(c
                 => !string.IsNullOrWhiteSpace(c.Name)
                 && c.Name.Equals(ConfigName, StringComparison.OrdinalIgnoreCase))

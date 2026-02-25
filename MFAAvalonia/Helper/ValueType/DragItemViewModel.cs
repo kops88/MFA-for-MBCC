@@ -2,6 +2,7 @@
 using MFAAvalonia.Configuration;
 using MFAAvalonia.Extensions;
 using MFAAvalonia.Extensions.MaaFW;
+using MFAAvalonia.ViewModels.Pages;
 using Newtonsoft.Json;
 using System;
 using System.Linq;
@@ -10,19 +11,19 @@ namespace MFAAvalonia.Helper.ValueType;
 
 public partial class DragItemViewModel : ObservableObject
 {
+    [JsonIgnore]
+    public TaskQueueViewModel? OwnerViewModel { get; set; }
+
     public DragItemViewModel(MaaInterface.MaaInterfaceTask? interfaceItem)
     {
         InterfaceItem = interfaceItem;
         if (interfaceItem != null)
         {
-            Name = LanguageHelper.GetLocalizedDisplayName(interfaceItem.DisplayName, interfaceItem.Name ?? LangKeys.Unnamed);
             interfaceItem.InitializeIcon();
         }
-        else
-        {
-            Name = LangKeys.Unnamed.ToLocalization();
-        }
+        UpdateDisplayName();
         UpdateIconFromInterfaceItem();
+        InitializeSupportStatus();
         LanguageHelper.LanguageChanged += OnLanguageChanged;
     }
 
@@ -49,6 +50,9 @@ public partial class DragItemViewModel : ObservableObject
     }
 
     [ObservableProperty] private string _name = string.Empty;
+
+    /// <summary>验证不通过时标记为 true，用于 UI 红圈提示</summary>
+    [ObservableProperty] [JsonIgnore] private bool _hasValidationError;
 
     /// <summary>解析后的图标路径（用于 UI 绑定）</summary>
     [ObservableProperty] private string? _resolvedIcon;
@@ -80,8 +84,11 @@ public partial class DragItemViewModel : ObservableObject
                 SetProperty(ref _isCheckedWithNull, value);
                 if (InterfaceItem != null)
                     InterfaceItem.Check = _isCheckedWithNull;
-                ConfigurationManager.Current.SetValue(ConfigurationKeys.TaskItems,
-                    Instances.TaskQueueViewModel.TaskItemViewModels.ToList().Select(model => model.InterfaceItem));
+
+                if (ConfigurationManager.IsSwitching) return;
+
+                (OwnerViewModel?.Processor.InstanceConfiguration ?? ConfigurationManager.CurrentInstance).SetValue(ConfigurationKeys.TaskItems,
+                    (OwnerViewModel ?? Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel)?.TaskItemViewModels.Where(m => !m.IsResourceOptionItem).Select(model => model.InterfaceItem).ToList());
             }
         }
     }
@@ -108,7 +115,7 @@ public partial class DragItemViewModel : ObservableObject
         set
         {
             SetProperty(ref _enableSetting, value);
-            Instances.TaskQueueView.SetOption(this, value);
+            OwnerViewModel?.RequestSetOption(this, value);
         }
     }
 
@@ -121,13 +128,13 @@ public partial class DragItemViewModel : ObservableObject
         {
             if (value != null)
             {
-                if (!string.IsNullOrEmpty(value.DisplayName))
-                    Name = value.DisplayName;
                 IsVisible = value is { Advanced.Count: > 0 } || value is { Option.Count: > 0 } || value.Repeatable == true || !string.IsNullOrWhiteSpace(value.Description) || value.Document is { Count: > 0 };
                 IsCheckedWithNull = value.Check;
             }
 
             SetProperty(ref _interfaceItem, value);
+            UpdateDisplayName();
+            UpdateIconFromInterfaceItem();
         }
     }
 
@@ -153,6 +160,17 @@ public partial class DragItemViewModel : ObservableObject
     [ObservableProperty] [JsonIgnore] private bool _isResourceSupported = true;
 
     /// <summary>
+    /// 指示任务是否支持当前选中的控制器。
+    /// 当控制器变化时，此属性会被更新。
+    /// </summary>
+    [ObservableProperty] [JsonIgnore] private bool _isControllerSupported = true;
+
+    /// <summary>
+    /// 指示任务是否同时支持当前资源包与控制器。
+    /// </summary>
+    [ObservableProperty] [JsonIgnore] private bool _isTaskSupported = true;
+
+    /// <summary>
     /// 检查任务是否支持指定的资源包
     /// </summary>
     /// <param name="resourceName">资源包名称</param>
@@ -173,28 +191,118 @@ public partial class DragItemViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 检查任务是否支持指定的控制器
+    /// </summary>
+    /// <param name="controllerName">控制器名称</param>
+    /// <returns>如果任务支持该控制器或未指定控制器限制，则返回 true</returns>
+    public bool SupportsController(string? controllerName)
+    {
+        // 如果任务没有指定 controller，则支持所有控制器
+        if (InterfaceItem?.Controller == null || InterfaceItem.Controller.Count == 0)
+            return true;
+
+        // 如果控制器名称为空，则显示所有任务
+        if (string.IsNullOrWhiteSpace(controllerName))
+            return true;
+
+        // 检查任务是否支持当前控制器
+        return InterfaceItem.Controller.Any(c =>
+            c.Equals(controllerName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// 更新任务对指定资源包的支持状态
     /// </summary>
     /// <param name="resourceName">资源包名称</param>
     public void UpdateResourceSupport(string? resourceName)
     {
         IsResourceSupported = SupportsResource(resourceName);
+        UpdateTaskSupport();
+    }
+
+    /// <summary>
+    /// 更新任务对指定控制器的支持状态
+    /// </summary>
+    /// <param name="controllerName">控制器名称</param>
+    public void UpdateControllerSupport(string? controllerName)
+    {
+        IsControllerSupported = SupportsController(controllerName);
+        UpdateTaskSupport();
+    }
+
+    private void UpdateTaskSupport()
+    {
+        IsTaskSupported = IsResourceSupported && IsControllerSupported;
+    }
+
+    private void InitializeSupportStatus()
+    {
+        if (IsResourceOptionItem)
+            return;
+
+        try
+        {
+            var resourceName = (OwnerViewModel ?? Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel)?.CurrentResource;
+            UpdateResourceSupport(resourceName);
+
+            var controllerName = GetCurrentControllerName();
+            UpdateControllerSupport(controllerName);
+        }
+        catch (Exception)
+        {
+            UpdateTaskSupport();
+        }
+    }
+
+    private string? GetCurrentControllerName()
+    {
+        var currentControllerType = (OwnerViewModel ?? Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel)?.CurrentController ?? MaaControllerTypes.None;
+        var controllerTypeKey = currentControllerType.ToJsonKey();
+
+        var controller = MaaProcessor.Interface?.Controller?.Find(c =>
+            c.Type != null && c.Type.Equals(controllerTypeKey, StringComparison.OrdinalIgnoreCase));
+
+        return controller?.Name;
     }
     
     private void UpdateContent()
     {
+        UpdateDisplayName();
         if (IsResourceOptionItem && ResourceItem != null)
         {
-            // 使用 i18n 本地化名称 "资源预设配置"
-            Name = LangKeys.ResourcePresetConfig.ToLocalization();
             ResolvedIcon = ResourceItem.ResolvedIcon;
             HasIcon = ResourceItem.HasIcon;
+            return;
         }
-        else if (!string.IsNullOrEmpty(InterfaceItem?.DisplayName ?? LangKeys.Unnamed))
+        UpdateIconFromInterfaceItem();
+    }
+
+    private void UpdateDisplayName()
+    {
+        if (IsResourceOptionItem && ResourceItem != null)
         {
-            Name = LanguageHelper.GetLocalizedDisplayName(InterfaceItem.DisplayName, InterfaceItem.Name ?? LangKeys.Unnamed);
-            UpdateIconFromInterfaceItem();
+            Name = LangKeys.ResourcePresetConfig.ToLocalization();
+            return;
         }
+
+        if (InterfaceItem == null)
+        {
+            Name = LangKeys.Unnamed.ToLocalization();
+            return;
+        }
+
+        var displayName = !string.IsNullOrWhiteSpace(InterfaceItem.Remark)
+            ? InterfaceItem.Remark!
+            : !string.IsNullOrWhiteSpace(InterfaceItem.DisplayNameOverride)
+                ? InterfaceItem.DisplayNameOverride!
+                : LanguageHelper.GetLocalizedDisplayName(InterfaceItem.DisplayName, InterfaceItem.Name ?? LangKeys.Unnamed);
+
+        Name = displayName;
+    }
+
+    public void RefreshDisplayName()
+    {
+        UpdateDisplayName();
     }
 
     private void UpdateIconFromInterfaceItem()
@@ -227,13 +335,13 @@ public partial class DragItemViewModel : ObservableObject
         if (IsResourceOptionItem && ResourceItem != null)
         {
             // 克隆资源设置项
-            clone = new DragItemViewModel(ResourceItem);
+            clone = new DragItemViewModel(ResourceItem) { OwnerViewModel = this.OwnerViewModel };
         }
         else
         {
             // 克隆普通任务项
             MaaInterface.MaaInterfaceTask? clonedInterfaceItem = InterfaceItem?.Clone();
-            clone = new(clonedInterfaceItem);
+            clone = new(clonedInterfaceItem) { OwnerViewModel = this.OwnerViewModel };
         }
 
         // Copy all other properties to the new instance
@@ -242,6 +350,8 @@ public partial class DragItemViewModel : ObservableObject
         clone.EnableSetting = this.EnableSetting;
         clone.IsVisible = this.IsVisible;
         clone.IsResourceSupported = this.IsResourceSupported;
+        clone.IsControllerSupported = this.IsControllerSupported;
+        clone.IsTaskSupported = this.IsTaskSupported;
         clone.ResolvedIcon = this.ResolvedIcon;
         clone.HasIcon = this.HasIcon;
         clone.IsResourceOptionItem = this.IsResourceOptionItem;

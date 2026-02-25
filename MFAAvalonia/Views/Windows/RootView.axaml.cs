@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
 using Avalonia.Input;
+using MFAAvalonia;
 using Avalonia.Media;
 using Avalonia.Threading;
 using MFAAvalonia.Configuration;
@@ -63,9 +64,11 @@ public partial class RootView : SukiWindow
                 LoadUI();
             });
         };
-        if (Program.IsNewInstance)
+        if (AppRuntime.IsNewInstance)
         {
-            MaaProcessor.Instance.InitializeData();
+            MaaProcessorManager.Instance.LoadInstanceConfig();
+            // 启动懒加载（LoadInstanceConfig 已加载 ActiveTab 实例）
+            _ = MaaProcessorManager.Instance.StartLazyLoadingAsync();
         }
     }
 
@@ -121,25 +124,44 @@ public partial class RootView : SukiWindow
             if (Instances.RootViewModel.IsRunning)
             {
                 if (stopTask)
-                    MaaProcessor.Instance.Stop(MFATask.MFATaskStatus.STOPPED);
+                {
+                    foreach (var processor in MaaProcessor.Processors)
+                    {
+                        processor.Stop(MFATask.MFATaskStatus.STOPPED);
+                    }
+                }
                 else
                     DispatcherHelper.PostOnMainThread(() => Instances.RootViewModel.IsRunning = false);
             }
-            ConfigurationManager.Current.SetValue(ConfigurationKeys.TaskItems, Instances.TaskQueueViewModel.TaskItemViewModels.ToList().Select(model => model.InterfaceItem));
+            // Save current instance tasks
+            // 注意：必须用 .ToList() 物化最终结果，否则存入 Config 字典的是懒惰 IEnumerable，
+            // 后续 GetValue<List<T>> 无法通过类型转换读取，会返回空列表
+            var currentVM = Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
+            if (currentVM != null)
+            {
+                currentVM.Processor.InstanceConfiguration.SetValue(ConfigurationKeys.TaskItems,
+                    currentVM.TaskItemViewModels.Where(m => !m.IsResourceOptionItem).Select(model => model.InterfaceItem).ToList());
+            }
+
             // 确保窗口大小和位置被立即保存（绕过防抖机制）
-            MaaProcessor.Dispose();
+            foreach (var processor in MaaProcessor.Processors.ToList())
+            {
+                processor.Dispose();
+            }
             DispatcherHelper.PostOnMainThread(SaveWindowSizeAndPositionImmediately);
             if (!noLog)
                 LoggerHelper.Info("MFA Closed!");
             TrayIconManager.DisposeTrayIcon(Application.Current);
-            MaaProcessor.Instance.SetTasker();
+            // Instances.TaskQueueViewModel.Processor.SetTasker(); // SetTasker on disposed/stopping processor? Maybe not needed or should be loop?
+            // Assuming this was to clean up or reset. Dispose should be enough.
+            foreach (var processor in MaaProcessor.Processors) processor.SetTasker();
 
             CustomClassLoader.Dispose();
 
             if (!noLog)
                 LoggerHelper.DisposeLogger();
             GlobalHotkeyService.Shutdown();
-            Program.ReleaseMutex();
+            AppRuntime.ReleaseMutex();
         }
     }
 
@@ -180,31 +202,11 @@ public partial class RootView : SukiWindow
         return false;
     }
 
-    public static void AddLogByColor(string content,
-        string brush = "Gray",
-        string weight = "Regular",
-        bool showTime = true) =>
-        Instances.TaskQueueViewModel.AddLog(content, brush, weight, showTime);
-
-
-    public static void AddLog(string content,
-        IBrush? brush = null,
-        string weight = "Regular",
-        bool changeColor = true,
-        bool showTime = true)
-        =>
-            Instances.TaskQueueViewModel.AddLog(content, brush, weight, changeColor, showTime);
-    public static void AddLogByKeys(string key, IBrush? brush = null, bool transformKey = true, params string[] formatArgsKeys)
-        => Instances.TaskQueueViewModel.AddLogByKey(key, brush, true, transformKey, formatArgsKeys);
-    public static void AddLogByKey(string key, IBrush? brush = null, bool changeColor = true, bool transformKey = true, params string[] formatArgsKeys)
-        => Instances.TaskQueueViewModel.AddLogByKey(key, brush, changeColor, transformKey, formatArgsKeys);
-    public static void AddMarkdown(string key, IBrush? brush = null, bool changeColor = true, bool transformKey = true, params string[] formatArgsKeys)
-        => Instances.TaskQueueViewModel.AddMarkdown(key, brush, changeColor, transformKey, formatArgsKeys);
 
 #pragma warning  disable CS4014 // 由于此调用不会等待，因此在此调用完成之前将会继续执行当前方法。请考虑将 "await" 运算符应用于调用结果。
     public void LoadUI()
     {
-        if (Program.IsNewInstance)
+        if (AppRuntime.IsNewInstance)
         {
             foreach (var rfile in Directory.EnumerateFiles(AppContext.BaseDirectory, "*.backupMFA", SearchOption.AllDirectories))
             {
@@ -220,45 +222,50 @@ public partial class RootView : SukiWindow
                 }
             }
 
-            if (!MaaProcessor.Instance.IsV3)
+            var vm = Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
+            if (vm == null) return;
+
+            if (!vm.Processor.IsV3)
             {
                 DispatcherHelper.RunOnMainThread(
                     (Action)(async () =>
                     {
                         await Task.Delay(300);
-                        if ((MaaProcessor.Interface?.Controller?.Count ?? 0) == 1 || !ConfigurationManager.Current.ContainsKey(ConfigurationKeys.CurrentController))
-                            Instances.TaskQueueViewModel.CurrentController = (MaaProcessor.Interface?.Controller?.FirstOrDefault()?.Type).ToMaaControllerTypes(Instances.TaskQueueViewModel.CurrentController);
-                        var beforeTask = ConfigurationManager.Current.GetValue(ConfigurationKeys.BeforeTask, "None");
+                        if ((MaaProcessor.Interface?.Controller?.Count ?? 0) == 1 || !ConfigurationManager.CurrentInstance.ContainsKey(ConfigurationKeys.CurrentController))
+                            vm.CurrentController = (MaaProcessor.Interface?.Controller?.FirstOrDefault()?.Type).ToMaaControllerTypes(vm.CurrentController);
+                        var beforeTask = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.BeforeTask, "None");
+                        var startupScriptOnly = beforeTask.Equals("StartupScriptOnly", StringComparison.OrdinalIgnoreCase);
+                        var delayFingerprintMatching = beforeTask.Contains("StartupSoftware", StringComparison.OrdinalIgnoreCase);
                         if (!Convert.ToBoolean(GlobalConfiguration.GetValue(ConfigurationKeys.NoAutoStart, bool.FalseString))
-                            && (beforeTask.Contains("Startup", StringComparison.OrdinalIgnoreCase) || beforeTask.Equals("StartupScriptOnly", StringComparison.OrdinalIgnoreCase)))
+                            && (beforeTask.Contains("Startup", StringComparison.OrdinalIgnoreCase) || startupScriptOnly))
                         {
                             // 只有当不是 StartupScriptOnly 时才启动游戏
-                            if (!beforeTask.Equals("StartupScriptOnly", StringComparison.OrdinalIgnoreCase))
+                            if (!startupScriptOnly)
                             {
-                                MaaProcessor.Instance.TaskQueue.Enqueue(new MFATask
+                                vm.Processor.TaskQueue.Enqueue(new MFATask
                                 {
                                     Name = "启动前",
                                     Type = MFATask.MFATaskType.MFA,
-                                    Action = async () => await MaaProcessor.Instance.WaitSoftware(),
+                                    Action = async () => await vm.Processor.WaitSoftware(),
                                 });
                             }
                             // StartupScriptOnly 或 StartupSoftwareAndScript 时启动脚本 (onlyStart = false)
                             // StartupSoftware 时只启动游戏不启动脚本 (onlyStart = true)
-                            var controllerType = Instances.TaskQueueViewModel.CurrentController;
+                            var controllerType = vm.CurrentController;
                             if (controllerType == MaaControllerTypes.PlayCover)
                             {
-                                Instances.TaskQueueViewModel.TryReadPlayCoverConfig();
+                                vm.TryReadPlayCoverConfig();
                             }
-                            else if (ConfigurationManager.Current.GetValue(ConfigurationKeys.RememberAdb, true))
+                            else if (ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RememberAdb, true) && !delayFingerprintMatching)
                             {
-                                Instances.TaskQueueViewModel.TryReadAdbDeviceFromConfig(false, false);
+                                vm.TryReadAdbDeviceFromConfig(false, false);
                             }
                             var onlyStart = beforeTask.Equals("StartupSoftware", StringComparison.OrdinalIgnoreCase);
-                            MaaProcessor.Instance.Start(onlyStart, checkUpdate: true);
+                            vm.Processor.Start(onlyStart, checkUpdate: true);
                         }
                         else
                         {
-                            var controllerType = Instances.TaskQueueViewModel.CurrentController;
+                            var controllerType = vm.CurrentController;
                             var controllerKey = controllerType switch
                             {
                                 MaaControllerTypes.Adb => "Emulator",
@@ -267,32 +274,39 @@ public partial class RootView : SukiWindow
                                 _ => "Window"
                             };
 
-                            AddLogByKey("ConnectingTo", null, true, true, controllerKey);
+                            vm.AddLogByKey("ConnectingTo", (IBrush?)null, true, true, controllerKey);
 
                             if (controllerType == MaaControllerTypes.PlayCover)
                             {
-                                Instances.TaskQueueViewModel.TryReadPlayCoverConfig();
+                                vm.TryReadPlayCoverConfig();
                             }
                             else
                             {
-                                Instances.TaskQueueViewModel.TryReadAdbDeviceFromConfig();
+                                vm.TryReadAdbDeviceFromConfig();
                             }
 
-                            MaaProcessor.Instance.TaskQueue.Enqueue(new MFATask
+                            vm.Processor.TaskQueue.Enqueue(new MFATask
                             {
                                 Name = "连接检测",
                                 Type = MFATask.MFATaskType.MFA,
-                                Action = async () => await MaaProcessor.Instance.TestConnecting(),
+                                Action = async () => await vm.Processor.TestConnecting(),
                             });
-                            MaaProcessor.Instance.Start(true, checkUpdate: true);
+                            vm.Processor.Start(true, checkUpdate: true);
                         }
 
                         GlobalConfiguration.SetValue(ConfigurationKeys.NoAutoStart, bool.FalseString);
-                        Instances.RootViewModel.LockController = (MaaProcessor.Interface?.Controller?.Count ?? 0) == 1;
+
+                        // 重新初始化控制器选项，确保 ControllerOptions 包含正确的控制器列表
+                        // 因为 TaskQueueViewModel.Initialize() 可能在 MaaProcessor.Interface初始化之前被调用
+                        vm.InitializeControllerOptions();
+
+                        // 只有当 SelectedController 不为 null 时才锁定控制器
+                        // Instances.RootViewModel.LockController = (MaaProcessor.Interface?.Controller?.Count ?? 0) == 1
+                        //     && Instances.TaskQueueViewModel.SelectedController != null;
 
                         ConfigurationManager.Current.SetValue(ConfigurationKeys.EnableEdit, ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableEdit, false));
                         DragItemViewModel? tempTask = null;
-                        foreach (var task in Instances.TaskQueueViewModel.TaskItemViewModels)
+                        foreach (var task in vm.TaskItemViewModels)
                         {
                             // 优先选择资源选项项
                             if (task.IsResourceOptionItem && task.ResourceItem?.SelectOptions is { Count: > 0 })
@@ -324,6 +338,7 @@ public partial class RootView : SukiWindow
                             AnnouncementViewModel.AddAnnouncement(LanguageHelper.GetLocalizedString(MaaProcessor.Interface.Welcome));
                         }
                     }));
+
 
                 TaskManager.RunTaskAsync(async () =>
                 {
@@ -366,11 +381,16 @@ public partial class RootView : SukiWindow
         }
     }
 
+
     public void ClearTasks(Action? action = null)
     {
         DispatcherHelper.RunOnMainThread(() =>
         {
-            Instances.TaskQueueViewModel.TaskItemViewModels = new();
+            var vm = Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
+            if (vm != null)
+            {
+                vm.TaskItemViewModels = new();
+            }
             action?.Invoke();
         });
     }

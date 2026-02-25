@@ -1,14 +1,16 @@
 using Avalonia.Media;
+using MaaFramework.Binding.Buffers;
 using MaaFramework.Binding.Notification;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.Converters;
-using MFAAvalonia.Helper.ValueType;
+using MFAAvalonia.ViewModels.Pages;
 using MFAAvalonia.Views.Pages;
 using MFAAvalonia.Views.Windows;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -20,10 +22,12 @@ namespace MFAAvalonia.Extensions.MaaFW;
 public class FocusHandler
 {
     private AutoInitDictionary autoInitDictionary;
+    private readonly TaskQueueViewModel _viewModel;
 
-    public FocusHandler(AutoInitDictionary autoInitDictionary)
+    public FocusHandler(AutoInitDictionary autoInitDictionary, TaskQueueViewModel viewModel)
     {
         this.autoInitDictionary = autoInitDictionary;
+        _viewModel = viewModel;
     }
 
     public void UpdateDictionary(AutoInitDictionary dictionary)
@@ -74,8 +78,9 @@ public class FocusHandler
     /// <param name="taskModel">任务模型 JObject</param>
     /// <param name="message">消息类型</param>
     /// <param name="detail">详情</param>
+    /// <param name="imageBuffer">当前截图的 MaaImageBuffer，用于新协议中 {image} 占位符替换为 base64</param>
     /// <param name="onAborted">中止回调</param>
-    public void DisplayFocus(JObject taskModel, string message, string detail, Action? onAborted = null)
+    public void DisplayFocus(JObject taskModel, string message, string detail, MaaImageBuffer? imageBuffer = null, Action? onAborted = null)
     {
         try
         {
@@ -122,7 +127,7 @@ public class FocusHandler
                 // 1. 处理新协议（如果有）
                 if (newProtocolFocus is { HasValues: true } && newProtocolFocus.TryGetValue(message, out var templateToken))
                 {
-                    ProcessNewProtocol(templateToken, taskModel, detailsObj);
+                    ProcessNewProtocol(templateToken, taskModel, detailsObj, imageBuffer);
                 }
             }
             // 2. 处理旧协议（如果有）
@@ -137,7 +142,7 @@ public class FocusHandler
     /// <summary>
     /// 处理新协议消息
     /// </summary>
-    private void ProcessNewProtocol(JToken templateToken, JObject taskModel, JObject? detailsObj)
+    private void ProcessNewProtocol(JToken templateToken, JObject taskModel, JObject? detailsObj, MaaImageBuffer? imageBuffer)
     {
         // 处理字符串数组类型
         if (templateToken.Type == JTokenType.Array)
@@ -147,8 +152,8 @@ public class FocusHandler
                 if (item.Type == JTokenType.String)
                 {
                     var template = item.Value<string>();
-                    var displayText = ReplacePlaceholders(template!.ResolveContentAsync().Result, detailsObj);
-                    RootView.AddMarkdown(TaskQueueView.ConvertCustomMarkup(displayText));
+                    var displayText = ReplacePlaceholders(template!.ResolveContentAsync().Result, detailsObj, imageBuffer);
+                    _viewModel.AddMarkdown(TaskQueueView.ConvertCustomMarkup(displayText));
                 }
             }
         }
@@ -156,8 +161,8 @@ public class FocusHandler
         else if (templateToken.Type == JTokenType.String)
         {
             var template = templateToken.Value<string>();
-            var displayText = ReplacePlaceholders(template!.ResolveContentAsync().Result, detailsObj);
-            RootView.AddMarkdown(TaskQueueView.ConvertCustomMarkup(displayText));
+            var displayText = ReplacePlaceholders(template!.ResolveContentAsync().Result, detailsObj, imageBuffer);
+            _viewModel.AddMarkdown(TaskQueueView.ConvertCustomMarkup(displayText));
         }
     }
 
@@ -176,7 +181,7 @@ public class FocusHandler
                     foreach (var line in focus.Succeeded)
                     {
                         var (text, color) = ParseColorText(line);
-                        RootView.AddLog(HandleStringsWithVariables(text), color == null ? null : BrushHelper.ConvertToBrush(color));
+                        _viewModel.AddLog(HandleStringsWithVariables(text), color == null ? null : BrushHelper.ConvertToBrush(color));
                     }
                 }
                 break;
@@ -187,7 +192,7 @@ public class FocusHandler
                     foreach (var line in focus.Failed)
                     {
                         var (text, color) = ParseColorText(line);
-                        RootView.AddLog(HandleStringsWithVariables(text), color == null ? null : BrushHelper.ConvertToBrush(color));
+                        _viewModel.AddLog(HandleStringsWithVariables(text), color == null ? null : BrushHelper.ConvertToBrush(color));
                     }
                 }
                 break;
@@ -208,7 +213,7 @@ public class FocusHandler
                     foreach (var line in focus.Start)
                     {
                         var (text, color) = ParseColorText(line);
-                        RootView.AddLog(HandleStringsWithVariables(text), color == null ? null : BrushHelper.ConvertToBrush(color));
+                        _viewModel.AddLog(HandleStringsWithVariables(text), color == null ? null : BrushHelper.ConvertToBrush(color));
                     }
                 }
                 break;
@@ -218,9 +223,19 @@ public class FocusHandler
     /// <summary>
     /// 替换模板中的占位符
     /// </summary>
-    private string ReplacePlaceholders(string template, JObject? details)
+    private string ReplacePlaceholders(string template, JObject? details, MaaImageBuffer? imageBuffer = null)
     {
         string result = template;
+
+        // 替换 {image} 为 Markdown 内联图片（使用 maa://image/ 协议）
+        if (result.Contains("{image}") && imageBuffer != null)
+        {
+            var imageUrl = StoreImageAndGetUrl(imageBuffer);
+            if (!string.IsNullOrEmpty(imageUrl))
+            {
+                result = result.Replace("{image}", $"![image]({imageUrl})");
+            }
+        }
 
         // 再用details中的属性替换（如果有的话）
         if (details != null)
@@ -232,6 +247,34 @@ public class FocusHandler
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// 将 MaaImageBuffer 存入内存图片存储，返回 maa://image/{key} URL
+    /// </summary>
+    private static string? StoreImageAndGetUrl(MaaImageBuffer imageBuffer)
+    {
+        try
+        {
+            if (imageBuffer.IsInvalid || imageBuffer.IsEmpty)
+                return null;
+
+            if (!imageBuffer.TryGetEncodedData(out Stream encodedDataStream))
+                return null;
+
+            using (encodedDataStream)
+            {
+                encodedDataStream.Seek(0, SeekOrigin.Begin);
+                using var memoryStream = new MemoryStream();
+                encodedDataStream.CopyTo(memoryStream);
+                return CustomPathResolver.StoreImage(memoryStream.ToArray());
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Error($"存储图片失败: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -305,7 +348,7 @@ public class FocusHandler
     /// </summary>
     public static string HandleStringsWithVariables(string content, AutoInitDictionary autoInitDictionary)
     {
-        var handler = new FocusHandler(autoInitDictionary);
+        var handler = new FocusHandler(autoInitDictionary, null!);
         return handler.HandleStringsWithVariables(content);
     }
 }

@@ -36,7 +36,12 @@ public partial class AdbEditorDialogViewModel : ObservableObject
     [RelayCommand]
     async private Task Load()
     {
-        var storageProvider = Instances.RootView.StorageProvider;
+        var storageProvider = Instances.StorageProvider;
+        if (storageProvider == null)
+        {
+            ToastHelper.Warn(LangKeys.Warning.ToLocalization(), LangKeys.PlatformNotSupportedOperation.ToLocalization());
+            return;
+        }
 
         // 配置文件选择器选项
         var options = new FilePickerOpenOptions
@@ -63,8 +68,12 @@ public partial class AdbEditorDialogViewModel : ObservableObject
     [RelayCommand]
     public void Save()
     {
-        Instances.TaskQueueViewModel.Devices = [Output];
-        Instances.TaskQueueViewModel.CurrentDevice = Output;
+        var vm = Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
+        if (vm != null)
+        {
+            vm.Devices = [Output];
+            vm.CurrentDevice = Output;
+        }
 
         Dialog.Dismiss();
     }

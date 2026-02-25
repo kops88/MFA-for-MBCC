@@ -18,18 +18,18 @@ public partial class GameSettingsUserControlModel : ViewModelBase
 
     [ObservableProperty] private bool _showHitDraw = ConfigurationManager.Maa.GetValue(ConfigurationKeys.ShowHitDraw, false);
 
-    [ObservableProperty] private string _prescript = ConfigurationManager.Current.GetValue(ConfigurationKeys.Prescript, string.Empty);
+    [ObservableProperty] private string _prescript = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Prescript, string.Empty);
 
-    [ObservableProperty] private string _postScript = ConfigurationManager.Current.GetValue(ConfigurationKeys.Postscript, string.Empty);
+    [ObservableProperty] private string _postScript = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Postscript, string.Empty);
 
-    [ObservableProperty] private bool _continueRunningWhenError = ConfigurationManager.Current.GetValue(ConfigurationKeys.ContinueRunningWhenError, true);
+    [ObservableProperty] private bool _continueRunningWhenError = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.ContinueRunningWhenError, true);
 
     partial void OnEnableRecordingChanged(bool value)
     {
         ConfigurationManager.Maa.SetValue(ConfigurationKeys.Recording, value);
         //  MaaProcessor.Global.SetOption_Recording(value);
         Instances.RootViewModel.IsDebugMode = EnableSaveDraw || EnableRecording || ShowHitDraw || EnableSaveOnError;
-        MaaProcessor.Instance.SetTasker();
+        MaaProcessorManager.Instance.Current.SetTasker();
     }
 
     partial void OnEnableSaveDrawChanged(bool value)
@@ -37,7 +37,7 @@ public partial class GameSettingsUserControlModel : ViewModelBase
         ConfigurationManager.Maa.SetValue(ConfigurationKeys.SaveDraw, value);
         MaaProcessor.Global.SetOption_SaveDraw(value);
         Instances.RootViewModel.IsDebugMode = EnableSaveDraw || EnableRecording || ShowHitDraw || EnableSaveOnError;
-        MaaProcessor.Instance.SetTasker();
+        MaaProcessorManager.Instance.Current.SetTasker();
     }
 
     partial void OnEnableSaveOnErrorChanged(bool value)
@@ -45,7 +45,7 @@ public partial class GameSettingsUserControlModel : ViewModelBase
         ConfigurationManager.Maa.SetValue(ConfigurationKeys.SaveOnError, value);
         MaaProcessor.Global.SetOption(GlobalOption.SaveOnError, value);
         Instances.RootViewModel.IsDebugMode = EnableSaveDraw || EnableRecording || ShowHitDraw || EnableSaveOnError;
-        MaaProcessor.Instance.SetTasker();
+        MaaProcessorManager.Instance.Current.SetTasker();
     }
 
     partial void OnShowHitDrawChanged(bool value)
@@ -53,17 +53,17 @@ public partial class GameSettingsUserControlModel : ViewModelBase
         ConfigurationManager.Maa.SetValue(ConfigurationKeys.ShowHitDraw, value);
         MaaProcessor.Global.SetOption_DebugMode(value);
         Instances.RootViewModel.IsDebugMode = EnableSaveDraw || EnableRecording || ShowHitDraw || EnableSaveOnError;
-        MaaProcessor.Instance.SetTasker();
+        MaaProcessorManager.Instance.Current.SetTasker();
     }
 
     partial void OnPrescriptChanged(string value)
     {
-        ConfigurationManager.Current.SetValue(ConfigurationKeys.Prescript, value);
+        ConfigurationManager.CurrentInstance.SetValue(ConfigurationKeys.Prescript, value);
     }
 
     partial void OnPostScriptChanged(string value)
     {
-        ConfigurationManager.Current.SetValue(ConfigurationKeys.Postscript, value);
+        ConfigurationManager.CurrentInstance.SetValue(ConfigurationKeys.Postscript, value);
     }
 
     partial void OnContinueRunningWhenErrorChanged(bool value) => HandlePropertyChanged(ConfigurationKeys.ContinueRunningWhenError, value);

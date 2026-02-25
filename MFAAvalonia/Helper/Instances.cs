@@ -1,9 +1,15 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
+using Avalonia.Input.Platform;
+using Avalonia.Platform.Storage;
+using MFAAvalonia;
 using MFAAvalonia.Configuration;
 using MFAAvalonia.Extensions;
+using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Utilities.Attributes;
+using MFAAvalonia.ViewModels.Other;
 using MFAAvalonia.ViewModels.Pages;
 using MFAAvalonia.ViewModels.UsersControls.Settings;
 using MFAAvalonia.ViewModels.Windows;
@@ -19,6 +25,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace MFAAvalonia.Helper;
 
@@ -174,11 +181,11 @@ public static partial class Instances
 
     public static void ShutdownApplication(bool forceStop)
     {
-        Program.ReleaseMutex();
+        AppRuntime.ReleaseMutex();
         if (forceStop)
         {
             // 强制退出时，只做最基本的清理，避免卡住
-            RootView.BeforeClosed(true, false);
+            TryBeforeClosed(true, false);
             Environment.Exit(0);
             return;
         }
@@ -192,7 +199,7 @@ public static partial class Instances
     /// </summary>
     public static void RestartApplication(bool noAutoStart = false, bool forgeStop = false)
     {
-        Program.ReleaseMutex();
+        AppRuntime.ReleaseMutex();
         if (noAutoStart)
             GlobalConfiguration.SetValue(ConfigurationKeys.NoAutoStart, bool.TrueString);
         var process = new Process
@@ -223,7 +230,7 @@ public static partial class Instances
     /// </summary>
     public static void ShutdownSystem()
     {
-        RootView.BeforeClosed();
+        TryBeforeClosed();
         try
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -328,6 +335,19 @@ public static partial class Instances
         return Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? AppContext.BaseDirectory;
     }
 
+    public static void TryBeforeClosed() => TryBeforeClosed(false, true);
+
+    public static void TryBeforeClosed(bool noLog, bool stopTask)
+    {
+        if (OperatingSystem.IsAndroid())
+            return;
+
+        if (IsResolved<RootView>())
+        {
+            RootView.BeforeClosed(noLog, stopTask);
+        }
+    }
+
     private static IClassicDesktopStyleApplicationLifetime _applicationLifetime;
     private static ISukiToastManager _toastManager;
     private static ISukiDialogManager _dialogManager;
@@ -335,15 +355,29 @@ public static partial class Instances
     private static RootView _rootView;
     private static RootViewModel _rootViewModel;
 
-    private static TaskQueueView _taskQueueView;
-    private static TaskQueueViewModel _taskQueueViewModel;
+    public static TopLevel? TopLevel =>
+        Application.Current?.ApplicationLifetime switch
+        {
+            IClassicDesktopStyleApplicationLifetime desktop => desktop.MainWindow,
+            ISingleViewApplicationLifetime single when single.MainView is Control control => TopLevel.GetTopLevel(control),
+            _ => null
+        };
+
+    public static IStorageProvider? StorageProvider => TopLevel?.StorageProvider;
+
+    public static IClipboard? Clipboard => TopLevel?.Clipboard;
+
+    private static InstanceContainerView _instanceContainerView;
+    private static InstanceTabBarViewModel _instanceTabBarViewModel;
     private static SettingsView _settingsView;
     private static SettingsViewModel _settingsViewModel;
     private static ResourcesView _resourcesView;
     private static ResourcesViewModel _resourcesViewModel;
+    private static MonitorView _monitorView;
+    private static MonitorViewModel _monitorViewModel;
     private static ScreenshotView _screenshotView;
     private static ScreenshotViewModel _screenshotViewModel;
-
+    
     private static ConnectSettingsUserControl _connectSettingsUserControl;
     private static ConnectSettingsUserControlModel _connectSettingsUserControlModel;
     private static GuiSettingsUserControl _guiSettingsUser;
@@ -364,55 +398,108 @@ public static partial class Instances
     private static AboutUserControl _aboutUserControl;
     private static HotKeySettingsUserControl _hotKeySettingsUserControl;
 
-    public static void ReloadConfigurationForSwitch()
+    public static void ReloadConfigurationForSwitch(bool refreshTask = true)
     {
-        DispatcherHelper.RunOnMainThread(() =>
+        _ = ReloadConfigurationForSwitchAsync(refreshTask);
+    }
+
+    public static async Task ReloadConfigurationForSwitchAsync(bool refreshTask = true)
+    {
+        static Task UpdateProgressAsync(double value) =>
+            DispatcherHelper.RunOnMainThreadAsync(() => Instances.RootViewModel.SetConfigSwitchProgress(value));
+
+        await UpdateProgressAsync(30);
+
+        // 仅在配置档案切换时刷新 SettingsViewModel 和全局设置
+        if (refreshTask)
         {
-            if (IsResolved<SettingsViewModel>())
+            await DispatcherHelper.RunOnMainThreadAsync(() =>
             {
-                Instances.SettingsViewModel.RefreshCurrentConfiguration();
-            }
-
-            if (IsResolved<GuiSettingsUserControlModel>())
-            {
-                var gui = GuiSettingsUserControlModel;
-                var theme = SukiUI.SukiTheme.GetInstance();
-
-                gui.BackgroundAnimations = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundAnimations, false);
-                gui.BackgroundTransitions = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundTransitions, false);
-                gui.BackgroundStyle = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundStyle, SukiUI.Enums.SukiBackgroundStyle.GradientSoft, SukiUI.Enums.SukiBackgroundStyle.GradientSoft, new MFAAvalonia.Helper.Converters.UniversalEnumConverter<SukiUI.Enums.SukiBackgroundStyle>());
-                gui.ShouldMinimizeToTray = ConfigurationManager.Current.GetValue(ConfigurationKeys.ShouldMinimizeToTray, false);
-                gui.EnableToastNotification = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableToastNotification, true);
-                gui.BackgroundImagePath = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImagePath, string.Empty);
-                gui.BackgroundImageOpacity = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageOpacity, 0.2);
-                gui.FontScale = ConfigurationManager.Current.GetValue(ConfigurationKeys.FontScale, FontService.DefaultScale);
-
-                gui.CurrentColorTheme = ConfigurationManager.Current.GetValue(ConfigurationKeys.ColorTheme, theme.ColorThemes.First(t => t.DisplayName.Equals("blue", StringComparison.OrdinalIgnoreCase)));
-                gui.BaseTheme = ConfigurationManager.Current.GetValue(ConfigurationKeys.BaseTheme, Avalonia.Styling.ThemeVariant.Light, new System.Collections.Generic.Dictionary<object, Avalonia.Styling.ThemeVariant>
+                if (IsResolved<SettingsViewModel>())
                 {
-                    ["Dark"] = Avalonia.Styling.ThemeVariant.Dark,
-                    ["Light"] = Avalonia.Styling.ThemeVariant.Light
-                });
+                    SettingsViewModel.RefreshCurrentConfiguration();
+                }
+            });
+            await UpdateProgressAsync(35);
 
-                var language = ConfigurationManager.Current.GetValue(ConfigurationKeys.CurrentLanguage, LanguageHelper.SupportedLanguages[0].Key, ["zh-CN", "zh-Hant", "en-US"]);
-                gui.CurrentLanguage = language;
-                LanguageHelper.ChangeLanguage(language);
-            }
+            await DispatcherHelper.RunOnMainThreadAsync(() =>
+            {
+                if (IsResolved<GuiSettingsUserControlModel>())
+                {
+                    var gui = GuiSettingsUserControlModel;
+                    var theme = SukiUI.SukiTheme.GetInstance();
 
+                    gui.BackgroundAnimations = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundAnimations, false);
+                    gui.BackgroundTransitions = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundTransitions, false);
+                    gui.BackgroundStyle = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundStyle, SukiUI.Enums.SukiBackgroundStyle.GradientSoft, SukiUI.Enums.SukiBackgroundStyle.GradientSoft,
+                        new Converters.UniversalEnumConverter<SukiUI.Enums.SukiBackgroundStyle>());
+                    gui.ShouldMinimizeToTray = ConfigurationManager.Current.GetValue(ConfigurationKeys.ShouldMinimizeToTray, false);
+                    gui.EnableToastNotification = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableToastNotification, true);
+                    gui.BackgroundImagePath = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImagePath, string.Empty);
+                    gui.BackgroundImageOpacity = ConfigurationManager.Current.GetValue(ConfigurationKeys.BackgroundImageOpacity, 0.2);
+                    gui.FontScale = ConfigurationManager.Current.GetValue(ConfigurationKeys.FontScale, FontService.DefaultScale);
+
+                    gui.CurrentColorTheme = GuiSettingsUserControlModel.FindColorThemeFromConfig();
+                    gui.BaseTheme = ConfigurationManager.Current.GetValue(ConfigurationKeys.BaseTheme, Avalonia.Styling.ThemeVariant.Light, new System.Collections.Generic.Dictionary<object, Avalonia.Styling.ThemeVariant>
+                    {
+                        ["Dark"] = Avalonia.Styling.ThemeVariant.Dark,
+                        ["Light"] = Avalonia.Styling.ThemeVariant.Light
+                    });
+
+                    // 实际应用主题到UI
+                    theme.ChangeBaseTheme(gui.BaseTheme);
+                    theme.ChangeColorTheme(gui.CurrentColorTheme);
+
+                    var language = ConfigurationManager.Current.GetValue(ConfigurationKeys.CurrentLanguage, LanguageHelper.SupportedLanguages[0].Key, ["zh-CN", "zh-Hant", "en-US"]);
+                    gui.CurrentLanguage = language;
+                    LanguageHelper.ChangeLanguage(language);
+                }
+            });
+            await UpdateProgressAsync(45);
+        }
+
+        // 实例级配置：ConnectSettings、StartSettings、GameSettings 在实例切换和配置切换时都需要刷新
+        await DispatcherHelper.RunOnMainThreadAsync(() =>
+        {
             if (IsResolved<ConnectSettingsUserControlModel>())
             {
                 var connect = ConnectSettingsUserControlModel;
-                connect.RememberAdb = ConfigurationManager.Current.GetValue(ConfigurationKeys.RememberAdb, true);
-                connect.UseFingerprintMatching = ConfigurationManager.Current.GetValue(ConfigurationKeys.UseFingerprintMatching, true);
-                connect.AdbControlScreenCapType = ConfigurationManager.Current.GetValue(ConfigurationKeys.AdbControlScreenCapType, MaaFramework.Binding.AdbScreencapMethods.None, new System.Collections.Generic.List<MaaFramework.Binding.AdbScreencapMethods> { MaaFramework.Binding.AdbScreencapMethods.All, MaaFramework.Binding.AdbScreencapMethods.Default }, new MFAAvalonia.Helper.Converters.UniversalEnumConverter<MaaFramework.Binding.AdbScreencapMethods>());
-                connect.AdbControlInputType = ConfigurationManager.Current.GetValue(ConfigurationKeys.AdbControlInputType, MaaFramework.Binding.AdbInputMethods.None, new System.Collections.Generic.List<MaaFramework.Binding.AdbInputMethods> { MaaFramework.Binding.AdbInputMethods.All, MaaFramework.Binding.AdbInputMethods.Default }, new MFAAvalonia.Helper.Converters.UniversalEnumConverter<MaaFramework.Binding.AdbInputMethods>());
-                connect.Win32ControlScreenCapType = ConfigurationManager.Current.GetValue(ConfigurationKeys.Win32ControlScreenCapType, MaaFramework.Binding.Win32ScreencapMethod.FramePool, MaaFramework.Binding.Win32ScreencapMethod.None, new MFAAvalonia.Helper.Converters.UniversalEnumConverter<MaaFramework.Binding.Win32ScreencapMethod>());
-                connect.Win32ControlMouseType = ConfigurationManager.Current.GetValue(ConfigurationKeys.Win32ControlMouseType, MaaFramework.Binding.Win32InputMethod.SendMessage, MaaFramework.Binding.Win32InputMethod.None, new MFAAvalonia.Helper.Converters.UniversalEnumConverter<MaaFramework.Binding.Win32InputMethod>());
-                connect.Win32ControlKeyboardType = ConfigurationManager.Current.GetValue(ConfigurationKeys.Win32ControlKeyboardType, MaaFramework.Binding.Win32InputMethod.SendMessage, MaaFramework.Binding.Win32InputMethod.None, new MFAAvalonia.Helper.Converters.UniversalEnumConverter<MaaFramework.Binding.Win32InputMethod>());
-                connect.RetryOnDisconnected = ConfigurationManager.Current.GetValue(ConfigurationKeys.RetryOnDisconnected, false);
-                connect.AllowAdbRestart = ConfigurationManager.Current.GetValue(ConfigurationKeys.AllowAdbRestart, true);
-                connect.AllowAdbHardRestart = ConfigurationManager.Current.GetValue(ConfigurationKeys.AllowAdbHardRestart, true);
-                connect.AutoDetectOnConnectionFailed = ConfigurationManager.Current.GetValue(ConfigurationKeys.AutoDetectOnConnectionFailed, true);
+                connect.IsSyncing = true;
+                try
+                {
+                    connect.CurrentControllerType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.CurrentController,
+                        MaaControllerTypes.Adb, MaaControllerTypes.None,
+                        new Converters.UniversalEnumConverter<MaaControllerTypes>());
+                    connect.RememberAdb = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RememberAdb, true);
+                    connect.UseFingerprintMatching = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.UseFingerprintMatching, true);
+                    connect.AdbControlScreenCapType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AdbControlScreenCapType, MaaFramework.Binding.AdbScreencapMethods.None,
+                        new System.Collections.Generic.List<MaaFramework.Binding.AdbScreencapMethods>
+                        {
+                            MaaFramework.Binding.AdbScreencapMethods.All,
+                            MaaFramework.Binding.AdbScreencapMethods.Default
+                        }, new Converters.UniversalEnumConverter<MaaFramework.Binding.AdbScreencapMethods>());
+                    connect.AdbControlInputType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AdbControlInputType, MaaFramework.Binding.AdbInputMethods.None, new System.Collections.Generic.List<MaaFramework.Binding.AdbInputMethods>
+                    {
+                        MaaFramework.Binding.AdbInputMethods.All,
+                        MaaFramework.Binding.AdbInputMethods.Default
+                    }, new Converters.UniversalEnumConverter<MaaFramework.Binding.AdbInputMethods>());
+                    connect.Win32ControlScreenCapType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32ControlScreenCapType, MaaFramework.Binding.Win32ScreencapMethod.FramePool, MaaFramework.Binding.Win32ScreencapMethod.None,
+                        new Converters.UniversalEnumConverter<MaaFramework.Binding.Win32ScreencapMethod>());
+                    connect.Win32ControlMouseType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32ControlMouseType, MaaFramework.Binding.Win32InputMethod.SendMessage, MaaFramework.Binding.Win32InputMethod.None,
+                        new Converters.UniversalEnumConverter<MaaFramework.Binding.Win32InputMethod>());
+                    connect.Win32ControlKeyboardType = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32ControlKeyboardType, MaaFramework.Binding.Win32InputMethod.SendMessage, MaaFramework.Binding.Win32InputMethod.None,
+                        new Converters.UniversalEnumConverter<MaaFramework.Binding.Win32InputMethod>());
+                    connect.RetryOnDisconnected = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RetryOnDisconnected, false);
+                    connect.RetryOnDisconnectedWin32 = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RetryOnDisconnectedWin32, false);
+                    connect.AllowAdbRestart = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AllowAdbRestart, true);
+                    connect.AllowAdbHardRestart = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AllowAdbHardRestart, true);
+                    connect.AutoDetectOnConnectionFailed = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AutoDetectOnConnectionFailed, true);
+                    connect.AutoConnectAfterRefresh = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AutoConnectAfterRefresh, true);
+                }
+                finally
+                {
+                    connect.IsSyncing = false;
+                }
             }
 
             if (IsResolved<StartSettingsUserControlModel>())
@@ -420,116 +507,151 @@ public static partial class Instances
                 var start = StartSettingsUserControlModel;
                 start.AutoMinimize = ConfigurationManager.Current.GetValue(ConfigurationKeys.AutoMinimize, false);
                 start.AutoHide = ConfigurationManager.Current.GetValue(ConfigurationKeys.AutoHide, false);
-                start.SoftwarePath = ConfigurationManager.Current.GetValue(ConfigurationKeys.SoftwarePath, string.Empty);
-                start.EmulatorConfig = ConfigurationManager.Current.GetValue(ConfigurationKeys.EmulatorConfig, string.Empty);
-                start.WaitSoftwareTime = ConfigurationManager.Current.GetValue(ConfigurationKeys.WaitSoftwareTime, 60.0);
-                start.BeforeTask = ConfigurationManager.Current.GetValue(ConfigurationKeys.BeforeTask, "None");
-                start.AfterTask = ConfigurationManager.Current.GetValue(ConfigurationKeys.AfterTask, "None");
+                start.SoftwarePath = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.SoftwarePath, string.Empty);
+                start.EmulatorConfig = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.EmulatorConfig, string.Empty);
+                start.WaitSoftwareTime = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.WaitSoftwareTime, 60.0);
+                start.BeforeTask = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.BeforeTask, "None");
+                start.AfterTask = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AfterTask, "None");
             }
 
             if (IsResolved<GameSettingsUserControlModel>())
             {
                 var game = GameSettingsUserControlModel;
-                game.Prescript = ConfigurationManager.Current.GetValue(ConfigurationKeys.Prescript, string.Empty);
-                game.PostScript = ConfigurationManager.Current.GetValue(ConfigurationKeys.Postscript, string.Empty);
-                game.ContinueRunningWhenError = ConfigurationManager.Current.GetValue(ConfigurationKeys.ContinueRunningWhenError, true);
+                game.Prescript = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Prescript, string.Empty);
+                game.PostScript = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Postscript, string.Empty);
+                game.ContinueRunningWhenError = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.ContinueRunningWhenError, true);
             }
+        });
+        await UpdateProgressAsync(60);
 
-            if (IsResolved<PerformanceUserControlModel>())
+        // 全局配置：仅在配置档案切换时刷新（ExternalNotification、Performance、VersionUpdate 是全局的，实例切换时不变）
+        if (refreshTask)
+        {
+            await DispatcherHelper.RunOnMainThreadAsync(() =>
             {
-                var performance = PerformanceUserControlModel;
-                performance.UseDirectML = ConfigurationManager.Current.GetValue(ConfigurationKeys.UseDirectML, false);
-                performance.GpuIndex = ConfigurationManager.Current.GetValue(ConfigurationKeys.GPUOption, 0);
+                if (IsResolved<PerformanceUserControlModel>())
+                {
+                    var performance = PerformanceUserControlModel;
+                    performance.UseDirectML = ConfigurationManager.Current.GetValue(ConfigurationKeys.UseDirectML, false);
+                    performance.GpuIndex = ConfigurationManager.Current.GetValue(ConfigurationKeys.GPUOption, 0);
+                }
+
+                if (IsResolved<ExternalNotificationSettingsUserControlModel>())
+                {
+                    var external = ExternalNotificationSettingsUserControlModel;
+                    ExternalNotificationSettingsUserControlModel.EnabledExternalNotificationProviderList.Clear();
+                    var enabled = ConfigurationManager.Current.GetValue(ConfigurationKeys.ExternalNotificationEnabled, string.Empty)
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries);
+                    ExternalNotificationSettingsUserControlModel.EnabledExternalNotificationProviderList.AddRange(enabled);
+                    external.UpdateExternalNotificationProvider();
+                    external.EnabledExternalNotificationProviderCount = ExternalNotificationSettingsUserControlModel.EnabledExternalNotificationProviderList.Count;
+
+                    external.DingTalkToken = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDingTalkToken, string.Empty);
+                    external.DingTalkSecret = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDingTalkSecret, string.Empty);
+                    external.EmailAccount = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationEmailAccount, string.Empty);
+                    external.EmailSecret = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationEmailSecret, string.Empty);
+                    external.LarkWebhookUrl = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationLarkWebhookUrl, string.Empty);
+                    external.LarkId = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationLarkID, string.Empty);
+                    external.LarkToken = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationLarkToken, string.Empty);
+                    external.WxPusherToken = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationWxPusherToken, string.Empty);
+                    external.WxPusherUid = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationWxPusherUID, string.Empty);
+                    external.TelegramBotToken = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationTelegramBotToken, string.Empty);
+                    external.TelegramChatId = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationTelegramChatId, string.Empty);
+                    external.DiscordBotToken = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDiscordBotToken, string.Empty);
+                    external.DiscordChannelId = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDiscordChannelId, string.Empty);
+                    external.DiscordWebhookUrl = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDiscordWebhookUrl, string.Empty);
+                    external.DiscordWebhookName = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDiscordWebhookName, string.Empty);
+                    external.SmtpServer = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpServer, string.Empty);
+                    external.SmtpPort = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpPort, string.Empty);
+                    external.SmtpUser = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpUser, string.Empty);
+                    external.SmtpPassword = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpPassword, string.Empty);
+                    external.SmtpFrom = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpFrom, string.Empty);
+                    external.SmtpTo = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpTo, string.Empty);
+                    external.SmtpUseSsl = ConfigurationManager.Current.GetValue(ConfigurationKeys.ExternalNotificationSmtpUseSsl, false);
+                    external.SmtpRequireAuthentication = ConfigurationManager.Current.GetValue(ConfigurationKeys.ExternalNotificationSmtpRequiresAuthentication, false);
+                    external.QmsgServer = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationQmsgServer, string.Empty);
+                    external.QmsgKey = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationQmsgKey, string.Empty);
+                    external.QmsgUser = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationQmsgUser, string.Empty);
+                    external.QmsgBot = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationQmsgBot, string.Empty);
+                    external.OnebotServer = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationOneBotServer, string.Empty);
+                    external.OnebotKey = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationOneBotKey, string.Empty);
+                    external.OnebotUser = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationOneBotUser, string.Empty);
+                    external.ServerChanSendKey = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationServerChanKey, string.Empty);
+                    external.CustomWebhookUrl = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationCustomWebhookUrl, string.Empty);
+                    external.CustomWebhookContentType = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationCustomWebhookContentType, "application/json");
+                    external.CustomWebhookPayloadTemplate = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationCustomWebhookPayloadTemplate, "{\"message\": \"{message}\"}");
+                    external.EnabledCustom = ConfigurationManager.Current.GetValue(ConfigurationKeys.ExternalNotificationEnableCustomMessage, false);
+                    external.CustomSuccessText = ConfigurationManager.Current.GetValue(ConfigurationKeys.ExternalNotificationCustomSuccessText, string.Empty);
+                    external.CustomFailureText = ConfigurationManager.Current.GetValue(ConfigurationKeys.ExternalNotificationCustomFailureText, string.Empty);
+                }
+
+                if (IsResolved<VersionUpdateSettingsUserControlModel>())
+                {
+                    var version = VersionUpdateSettingsUserControlModel;
+                    version.DownloadSourceIndex = ConfigurationManager.Current.GetValue(ConfigurationKeys.DownloadSourceIndex, 1);
+                    version.UIUpdateChannelIndex = ConfigurationManager.Current.GetValue(ConfigurationKeys.UIUpdateChannelIndex, 2);
+                    version.ResourceUpdateChannelIndex = ConfigurationManager.Current.GetValue(ConfigurationKeys.ResourceUpdateChannelIndex, 2);
+                    version.GitHubToken = SimpleEncryptionHelper.Decrypt(ConfigurationManager.Current.GetValue(ConfigurationKeys.GitHubToken, string.Empty));
+                    version.CdkPassword = SimpleEncryptionHelper.Decrypt(ConfigurationManager.Current.GetValue(ConfigurationKeys.DownloadCDK, string.Empty));
+                    version.EnableCheckVersion = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableCheckVersion, true);
+                    version.EnableAutoUpdateResource = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableAutoUpdateResource, false);
+                    version.EnableAutoUpdateMFA = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableAutoUpdateMFA, false);
+                    version.ProxyAddress = ConfigurationManager.Current.GetValue(ConfigurationKeys.ProxyAddress, string.Empty);
+                    version.ProxyType = ConfigurationManager.Current.GetValue(ConfigurationKeys.ProxyType, VersionUpdateSettingsUserControlModel.UpdateProxyType.Http, VersionUpdateSettingsUserControlModel.UpdateProxyType.Http,
+                        new Converters.UniversalEnumConverter<VersionUpdateSettingsUserControlModel.UpdateProxyType>());
+                }
+            });
+        }
+
+        // TimerSettings 需要在两种场景下都刷新（实例列表可能变化）
+        await DispatcherHelper.RunOnMainThreadAsync(() =>
+        {
+            if (IsResolved<TimerSettingsUserControlModel>())
+            {
+                TimerSettingsUserControlModel.RefreshInstances();
             }
+        });
+        await UpdateProgressAsync(72);
 
-            if (IsResolved<ExternalNotificationSettingsUserControlModel>())
+        if (refreshTask)
+        {
+            await DispatcherHelper.RunOnMainThreadAsync(() =>
             {
-                var external = ExternalNotificationSettingsUserControlModel;
-                ExternalNotificationSettingsUserControlModel.EnabledExternalNotificationProviderList.Clear();
-                var enabled = ConfigurationManager.Current.GetValue(ConfigurationKeys.ExternalNotificationEnabled, string.Empty)
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries);
-                ExternalNotificationSettingsUserControlModel.EnabledExternalNotificationProviderList.AddRange(enabled);
-                external.UpdateExternalNotificationProvider();
-                external.EnabledExternalNotificationProviderCount = ExternalNotificationSettingsUserControlModel.EnabledExternalNotificationProviderList.Count;
+                var task = InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
+                if (task == null) return;
 
-                external.DingTalkToken = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDingTalkToken, string.Empty);
-                external.DingTalkSecret = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDingTalkSecret, string.Empty);
-                external.EmailAccount = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationEmailAccount, string.Empty);
-                external.EmailSecret = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationEmailSecret, string.Empty);
-                external.LarkWebhookUrl = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationLarkWebhookUrl, string.Empty);
-                external.LarkId = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationLarkID, string.Empty);
-                external.LarkToken = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationLarkToken, string.Empty);
-                external.WxPusherToken = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationWxPusherToken, string.Empty);
-                external.WxPusherUid = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationWxPusherUID, string.Empty);
-                external.TelegramBotToken = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationTelegramBotToken, string.Empty);
-                external.TelegramChatId = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationTelegramChatId, string.Empty);
-                external.DiscordBotToken = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDiscordBotToken, string.Empty);
-                external.DiscordChannelId = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDiscordChannelId, string.Empty);
-                external.DiscordWebhookUrl = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDiscordWebhookUrl, string.Empty);
-                external.DiscordWebhookName = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationDiscordWebhookName, string.Empty);
-                external.SmtpServer = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpServer, string.Empty);
-                external.SmtpPort = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpPort, string.Empty);
-                external.SmtpUser = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpUser, string.Empty);
-                external.SmtpPassword = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpPassword, string.Empty);
-                external.SmtpFrom = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpFrom, string.Empty);
-                external.SmtpTo = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationSmtpTo, string.Empty);
-                external.SmtpUseSsl = ConfigurationManager.Current.GetValue(ConfigurationKeys.ExternalNotificationSmtpUseSsl, false);
-                external.SmtpRequireAuthentication = ConfigurationManager.Current.GetValue(ConfigurationKeys.ExternalNotificationSmtpRequiresAuthentication, false);
-                external.QmsgServer = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationQmsgServer, string.Empty);
-                external.QmsgKey = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationQmsgKey, string.Empty);
-                external.QmsgUser = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationQmsgUser, string.Empty);
-                external.QmsgBot = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationQmsgBot, string.Empty);
-                external.OnebotServer = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationOneBotServer, string.Empty);
-                external.OnebotKey = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationOneBotKey, string.Empty);
-                external.OnebotUser = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationOneBotUser, string.Empty);
-                external.ServerChanSendKey = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationServerChanKey, string.Empty);
-                external.CustomWebhookUrl = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationCustomWebhookUrl, string.Empty);
-                external.CustomWebhookContentType = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationCustomWebhookContentType, "application/json");
-                external.CustomWebhookPayloadTemplate = ConfigurationManager.Current.GetDecrypt(ConfigurationKeys.ExternalNotificationCustomWebhookPayloadTemplate, "{\"message\": \"{message}\"}");
-            }
+                task.CurrentConfiguration = ConfigurationManager.GetCurrentConfiguration();
+                task.TaskItemViewModels = new();
+                task.CurrentController = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.CurrentController, MaaControllerTypes.Adb, MaaControllerTypes.None,
+                    new Converters.UniversalEnumConverter<MaaControllerTypes>());
+                task.EnableLiveView = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.EnableLiveView, true);
+                task.LiveViewRefreshRate = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.LiveViewRefreshRate, 30.0);
+            });
+            await UpdateProgressAsync(80);
 
-            if (IsResolved<VersionUpdateSettingsUserControlModel>())
+            await UpdateProgressAsync(85);
+
+            await DispatcherHelper.RunOnMainThreadAsync(() =>
             {
-                var version = VersionUpdateSettingsUserControlModel;
-                version.DownloadSourceIndex = ConfigurationManager.Current.GetValue(ConfigurationKeys.DownloadSourceIndex, 1);
-                version.UIUpdateChannelIndex = ConfigurationManager.Current.GetValue(ConfigurationKeys.UIUpdateChannelIndex, 2);
-                version.ResourceUpdateChannelIndex = ConfigurationManager.Current.GetValue(ConfigurationKeys.ResourceUpdateChannelIndex, 2);
-                version.GitHubToken = SimpleEncryptionHelper.Decrypt(ConfigurationManager.Current.GetValue(ConfigurationKeys.GitHubToken, string.Empty));
-                version.CdkPassword = SimpleEncryptionHelper.Decrypt(ConfigurationManager.Current.GetValue(ConfigurationKeys.DownloadCDK, string.Empty));
-                version.EnableCheckVersion = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableCheckVersion, true);
-                version.EnableAutoUpdateResource = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableAutoUpdateResource, false);
-                version.EnableAutoUpdateMFA = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableAutoUpdateMFA, false);
-                version.ProxyAddress = ConfigurationManager.Current.GetValue(ConfigurationKeys.ProxyAddress, string.Empty);
-                version.ProxyType = ConfigurationManager.Current.GetValue(ConfigurationKeys.ProxyType, VersionUpdateSettingsUserControlModel.UpdateProxyType.Http, VersionUpdateSettingsUserControlModel.UpdateProxyType.Http, new MFAAvalonia.Helper.Converters.UniversalEnumConverter<VersionUpdateSettingsUserControlModel.UpdateProxyType>());
-            }
+                var task = InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
+                if (task == null) return;
 
-            var task = Instances.TaskQueueViewModel;
-            task.TaskItemViewModels = new();
-            task.CurrentController = ConfigurationManager.Current.GetValue(ConfigurationKeys.CurrentController, MFAAvalonia.Extensions.MaaFW.MaaControllerTypes.Adb, MFAAvalonia.Extensions.MaaFW.MaaControllerTypes.None, new MFAAvalonia.Helper.Converters.UniversalEnumConverter<MFAAvalonia.Extensions.MaaFW.MaaControllerTypes>());
-            task.EnableLiveView = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableLiveView, true);
-            task.LiveViewRefreshRate = ConfigurationManager.Current.GetValue(ConfigurationKeys.LiveViewRefreshRate, 30.0);
+                task.Processor.InitializeData();
 
-            if (IsResolved<MFAAvalonia.Views.Pages.TaskQueueView>())
-            {
-                Instances.TaskQueueView.ResetOptionPanels();
-            }
+                task.InitializeControllerOptions();
+                // 先从配置中读取目标资源，然后传入 UpdateResourcesForController
+                // 这样可以确保在配置切换时正确恢复资源，而不是总是选择第一个
+                var targetResource = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Resource, string.Empty);
+                task.UpdateResourcesForController(targetResource);
+                task.TryReadAdbDeviceFromConfig(); // 使用默认参数 (true, false, true) 以启用指纹匹配和自动检测，避免直接读取配置失败导致列表为空
 
-            MFAAvalonia.Extensions.MaaFW.MaaProcessor.Instance.InitializeData();
+                if (IsResolved<RootViewModel>())
+                {
+                    RootViewModel.IsDebugMode = ConfigurationManager.Maa.GetValue(ConfigurationKeys.Recording, false)
+                        || ConfigurationManager.Maa.GetValue(ConfigurationKeys.SaveDraw, false)
+                        || ConfigurationManager.Maa.GetValue(ConfigurationKeys.ShowHitDraw, false);
+                }
 
-            task.InitializeControllerOptions();
-            task.UpdateResourcesForController();
-            task.CurrentResource = ConfigurationManager.Current.GetValue(ConfigurationKeys.Resource, string.Empty);
-            task.TryReadAdbDeviceFromConfig(false, true);
-
-            if (IsResolved<RootViewModel>())
-            {
-                Instances.RootViewModel.IsDebugMode = ConfigurationManager.Maa.GetValue(ConfigurationKeys.Recording, false)
-                    || ConfigurationManager.Maa.GetValue(ConfigurationKeys.SaveDraw, false)
-                    || ConfigurationManager.Maa.GetValue(ConfigurationKeys.ShowHitDraw, false);
-            }
-
-            if (IsResolved<MFAAvalonia.Views.Pages.TaskQueueView>())
-            {
                 var selected = task.TaskItemViewModels.FirstOrDefault(i => i.IsResourceOptionItem)
                     ?? task.TaskItemViewModels.FirstOrDefault(i => i.InterfaceItem?.Advanced is { Count: > 0 }
                         || i.InterfaceItem?.Option is { Count: > 0 }
@@ -540,9 +662,10 @@ public static partial class Instances
                 {
                     selected.EnableSetting = true;
                 }
-            }
 
-            MFAAvalonia.Extensions.MaaFW.MaaProcessor.Instance.SetTasker();
-        });
+                task.Processor.SetTasker();
+            });
+        }
+        await UpdateProgressAsync(95);
     }
 }

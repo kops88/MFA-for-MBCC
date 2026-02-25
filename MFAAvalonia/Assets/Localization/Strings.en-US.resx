@@ -534,6 +534,9 @@
     <data name="GlobalConfigTip" xml:space="preserve">
         <value>This option page is for global config</value>
     </data>
+    <data name="InstanceConfigTip" xml:space="preserve">
+        <value>This option page is instance-scoped. Current instance: </value>
+    </data>
     <data name="GpuOptionAuto" xml:space="preserve">
         <value>Auto</value>
     </data>
@@ -807,8 +810,14 @@
     <data name="RetryOnDisconnected" xml:space="preserve">
         <value>Retry launching the emulator when ADB connection fails</value>
     </data>
+    <data name="RetryOnDisconnectedWin32" xml:space="preserve">
+        <value>Retry launching the game when Win32 connection fails</value>
+    </data>
     <data name="AutoDetectOnConnectionFailed" xml:space="preserve">
         <value>Auto detect available devices on connection failed</value>
+    </data>
+    <data name="AutoConnectAfterRefresh" xml:space="preserve">
+        <value>Auto connect after refreshing device list</value>
     </data>
     <data name="RunningSettings" xml:space="preserve">
         <value>Running</value>
@@ -981,6 +990,9 @@
     <data name="Timer" xml:space="preserve">
         <value>Timer</value>
     </data>
+    <data name="TimerAction" xml:space="preserve">
+        <value>Action Type</value>
+    </data>
     <data name="TimerCustomConfig" xml:space="preserve">
         <value>Custom config</value>
     </data>
@@ -1001,6 +1013,9 @@
     </data>
     <data name="TryToStartEmulator" xml:space="preserve">
         <value>Trying to start the emulator</value>
+    </data>
+    <data name="TryToStartGame" xml:space="preserve">
+        <value>Trying to start the game</value>
     </data>
     <data name="UiSettings" xml:space="preserve">
         <value>GUI</value>
@@ -1118,6 +1133,12 @@
     </data>
     <data name="AgentStartFailed" xml:space="preserve">
         <value>Agent startup failure</value>
+    </data>
+    <data name="AgentTcpMode" xml:space="preserve">
+        <value>Communication Compatibility Mode</value>
+    </data>
+    <data name="AgentTcpModeDescription" xml:space="preserve">
+        <value>If the app crashes immediately after starting a task, try enabling this. Only use in this case, otherwise it may affect performance.</value>
     </data>
     <data name="AgentExecutableNotFound" xml:space="preserve">
         <value>Agent executable file not found: {0}</value>
@@ -1491,6 +1512,384 @@
     </data>
     <data name="ResourceLayoutUpdatedContent" xml:space="preserve">
         <value>Resource layout file changed. Latest layout has been applied and current layout overwritten.</value>
+    </data>
+    <data name="TaskRemarkMenu" xml:space="preserve">
+        <value>Remark</value>
+    </data>
+    <data name="TaskRemarkTitle" xml:space="preserve">
+        <value>Task Remark</value>
+    </data>
+    <data name="TaskRename" xml:space="preserve">
+        <value>Rename</value>
+    </data>
+    <data name="TaskRenamePlaceholder" xml:space="preserve">
+        <value>Enter a custom display name (optional)</value>
+    </data>
+    <data name="TaskRemark" xml:space="preserve">
+        <value>Remark</value>
+    </data>
+    <data name="TaskRemarkPlaceholder" xml:space="preserve">
+        <value>Enter a remark (optional)</value>
+    </data>
+        <data name="PlatformNotSupportedOperation" xml:space="preserve">
+            <value>This operation is not supported on the current platform</value>
+        </data>
+        <data name="AdminPermissionRequired" xml:space="preserve">
+            <value>Administrator Permission Required</value>
+        </data>
+        <data name="AdminPermissionRequiredDetail" xml:space="preserve">
+            <value>The current controller requires administrator privileges. Please restart this application as administrator.</value>
+        </data>
+        <data name="StartupErrorTitle" xml:space="preserve">
+            <value>Startup Failed</value>
+        </data>
+        <data name="StartupErrorMessage" xml:space="preserve">
+            <value>{0} Failed
+    
+    Error Message:
+    {1}
+    
+    Details:
+    {2}</value>
+        </data>
+        <data name="MSVC2022Missing" xml:space="preserve">
+            <value>Missing runtime detected. Please try to download and install the latest Microsoft Visual C++ Redistributable (x64).</value>
+        </data>
+        <data name="MSVC2022DownloadLink" xml:space="preserve">
+            <value>Download Link: https://aka.ms/vs/17/release/vc_redist.x64.exe</value>
+        </data>
+        <data name="DownloadNowConfirmation" xml:space="preserve">
+            <value>Download now?</value>
+        </data>
+        <data name="RuntimeMissingTitle" xml:space="preserve">
+            <value>Runtime Missing</value>
+        </data>
+        <data name="RuntimeMissingWarning" xml:space="preserve">
+            <value>System Component Missing</value>
+        </data>
+        <data name="RuntimeMissingDescription" xml:space="preserve">
+            <value>MFAAvalonia requires Microsoft Visual C++ Redistributable (x64) to run.</value>
+        </data>
+        <data name="DownloadAndInstall" xml:space="preserve">
+            <value>Download and Install</value>
+        </data>
+        <data name="DownloadingStatus" xml:space="preserve">
+            <value>Downloading Runtime Library...</value>
+        </data>
+        <data name="InstallingStatus" xml:space="preserve">
+            <value>Waiting for installation to complete, please complete the operation in the popped up installation window.</value>
+        </data>
+        <data name="InstallSuccess" xml:space="preserve">
+            <value>Installation Completed. Please restart the application.</value>
+        </data>
+        <data name="DownloadError" xml:space="preserve">
+            <value>Error: {0}</value>
+        </data>
+        <data name="Retry" xml:space="preserve">
+            <value>Retry</value>
+        </data>
+        <data name="Close" xml:space="preserve">
+            <value>Close</value>
+        </data>
+        <data name="RuntimeMissingPrompt" xml:space="preserve">
+            <value>Click the button below to automatically download and run the installer, please note to click install in the popped up window.</value>
+        </data>
+        <data name="TempDirWarningTitle" xml:space="preserve">
+            <value>Wrong Program Location</value>
+        </data>
+        <data name="TempDirWarningMain" xml:space="preserve">
+            <value>It seems you double-clicked the program inside the zip file.</value>
+        </data>
+        <data name="TempDirWarningDesc" xml:space="preserve">
+            <value>The program is running in a temporary directory and may be lost when closed. Please extract the zip file to a folder first, then run the program inside.</value>
+        </data>
+        <data name="TempDirWarningHint" xml:space="preserve">
+            <value>Tip: It is recommended to extract to a dedicated folder, e.g. "D:\MFA", avoid Desktop or Download folders for better management.</value>
+        </data>
+    <data name="ExitProgram" xml:space="preserve">
+        <value>Exit Program</value>
+    </data>
+    <data name="PreventSleep" xml:space="preserve">
+        <value>Prevent Sleep</value>
+    </data>
+    <data name="Search" xml:space="preserve">
+        <value>Search...</value>
+    </data>
+    <data name="Config" xml:space="preserve">
+        <value>Config</value>
+    </data>
+    <data name="TutorialStepConnectTitle" xml:space="preserve">
+        <value>Toolbar Overview</value>
+    </data>
+    <data name="TutorialStepConnectDesc" xml:space="preserve">
+        <value>This is the top toolbar containing resource switching, controller selection, device connection and more. Let's walk through each one.</value>
+    </data>
+    <data name="TutorialStepAddTaskTitle" xml:space="preserve">
+        <value>Task List</value>
+    </data>
+    <data name="TutorialStepAddTaskDesc" xml:space="preserve">
+        <value>Check the tasks you want to run in the task list. Drag to reorder. Click the settings icon on the right side of each task to view its detailed parameters in the Task Settings panel.</value>
+    </data>
+    <data name="TutorialStepMultiConfigTitle" xml:space="preserve">
+        <value>Manage Configurations</value>
+    </data>
+    <data name="TutorialStepMultiConfigDesc" xml:space="preserve">
+        <value>Step 3: Create or switch configurations via the top tab bar — e.g. one for daily automation, another for real-time tools. Each config has independent tasks and device settings.</value>
+    </data>
+    <data name="TutorialNext" xml:space="preserve">
+        <value>Next</value>
+    </data>
+    <data name="TutorialPrevious" xml:space="preserve">
+        <value>Previous</value>
+    </data>
+    <data name="TutorialFinish" xml:space="preserve">
+        <value>Got it</value>
+    </data>
+    <data name="TutorialStepTaskOptionsTitle" xml:space="preserve">
+        <value>Task Settings</value>
+    </data>
+    <data name="TutorialStepTaskOptionsDesc" xml:space="preserve">
+        <value>This panel shows detailed parameter settings for the selected task. Click the settings icon next to different tasks in the task list to switch between their options.</value>
+    </data>
+    <data name="TutorialStepSettingsTitle" xml:space="preserve">
+        <value>Settings</value>
+    </data>
+    <data name="TutorialStepSettingsDesc" xml:space="preserve">
+        <value>Click the settings icon at the bottom of the left sidebar to configure global options like theme, language, and notifications.</value>
+    </data>
+    <data name="TutorialStepResourceTitle" xml:space="preserve">
+        <value>Resource Switching</value>
+    </data>
+    <data name="TutorialStepResourceDesc" xml:space="preserve">
+        <value>Use this dropdown to switch between different resource packs. Different packs may contain different task sets and configurations.</value>
+    </data>
+    <data name="TutorialStepControllerTitle" xml:space="preserve">
+        <value>Controller Type</value>
+    </data>
+    <data name="TutorialStepControllerDesc" xml:space="preserve">
+        <value>Select the controller type: Desktop, Desktop-Alt, Desktop-Foreground, or Android, etc. Choose the connection method that fits your use case.</value>
+    </data>
+    <data name="TutorialStepDeviceTitle" xml:space="preserve">
+        <value>Device Selection</value>
+    </data>
+    <data name="TutorialStepDeviceDesc" xml:space="preserve">
+        <value>Select the target device or window to connect to. The dropdown shows currently available devices.</value>
+    </data>
+    <data name="TutorialStepConnectionTitle" xml:space="preserve">
+        <value>Connection Controls</value>
+    </data>
+    <data name="TutorialStepConnectionDesc" xml:space="preserve">
+        <value>Here you'll find buttons to refresh the device list, reconnect, and a connection status indicator (green = connected, red = disconnected). Click "Start Task" to run your checked tasks.</value>
+    </data>
+    <data name="TutorialStepLogTitle" xml:space="preserve">
+        <value>Run Log</value>
+    </data>
+    <data name="TutorialStepLogDesc" xml:space="preserve">
+        <value>Log messages during task execution are displayed here for real-time monitoring and troubleshooting.</value>
+    </data>
+    <data name="TutorialStepSelectAllTitle" xml:space="preserve">
+        <value>Select All / Deselect All</value>
+    </data>
+    <data name="TutorialStepSelectAllDesc" xml:space="preserve">
+        <value>These two buttons quickly check or uncheck all tasks. The left one is "Select All" and the right one is "Deselect All".</value>
+    </data>
+    <data name="TutorialStepAddTaskBtnTitle" xml:space="preserve">
+        <value>Add &amp; Reset Tasks</value>
+    </data>
+    <data name="TutorialStepAddTaskBtnDesc" xml:space="preserve">
+        <value>The "Add Task" button adds new tasks to the list; the "Reset Tasks" button restores the task list to its default state.</value>
+    </data>
+    <data name="TutorialStepResetTaskTitle" xml:space="preserve">
+        <value>Start Tasks</value>
+    </data>
+    <data name="TutorialStepResetTaskDesc" xml:space="preserve">
+        <value>Click this button to start executing checked tasks. Click again while running to stop.</value>
+    </data>
+    <data name="TutorialStepTaskInteractTitle" xml:space="preserve">
+        <value>Task Interaction Tips</value>
+    </data>
+    <data name="TutorialStepTaskInteractDesc" xml:space="preserve">
+        <value>Left-click the checkbox to check/uncheck a task; right-click the checkbox to set it to "run only once" (indeterminate state).</value>
+    </data>
+    <data name="TutorialStepTaskItemTipTitle" xml:space="preserve">
+        <value>Task Item Actions</value>
+    </data>
+    <data name="TutorialStepTaskItemTipDesc" xml:space="preserve">
+        <value>Right-click a task item to open a context menu for running individually, adding remarks, or deleting. Click the settings icon on the right to view task parameters.</value>
+    </data>
+    <data name="TutorialStepExportLogTitle" xml:space="preserve">
+        <value>Export Log</value>
+    </data>
+    <data name="TutorialStepExportLogDesc" xml:space="preserve">
+        <value>Click this button to export run logs to a file for troubleshooting or sharing with developers.</value>
+    </data>
+    <data name="TutorialStepSettingsPageTitle" xml:space="preserve">
+        <value>Settings Page</value>
+    </data>
+    <data name="TutorialStepSettingsPageDesc" xml:space="preserve">
+        <value>This is the Settings page. Use the side or top navigation bar to quickly jump to different setting categories. The right side shows detailed settings for the selected category.</value>
+    </data>
+    <data name="TutorialStepStartupSettingsTitle" xml:space="preserve">
+        <value>Startup Settings</value>
+    </data>
+    <data name="TutorialStepStartupSettingsDesc" xml:space="preserve">
+        <value>Configure automatic actions before and after tasks, emulator/game launch path, startup parameters, and wait time here.</value>
+    </data>
+    <data name="TutorialStepBeforeAfterTaskTitle" xml:space="preserve">
+        <value>Before &amp; After Task Actions</value>
+    </data>
+    <data name="TutorialStepBeforeAfterTaskDesc" xml:space="preserve">
+        <value>"Before Task" automatically runs a specified action before tasks start (e.g., navigate to a specific screen); "After Task" runs after all tasks complete (e.g., exit game, close emulator).</value>
+    </data>
+    <data name="TutorialStepSoftwarePathTitle" xml:space="preserve">
+        <value>Set Launch Path</value>
+    </data>
+    <data name="TutorialStepSoftwarePathDesc" xml:space="preserve">
+        <value>Set the emulator or game launch path here for fully automated operation. Note: You must select "Launch Game" or "Launch &amp; Execute" in Connection Actions, or enable "Try to launch on connection failure" in Connection Settings for the launch path to take effect.</value>
+    </data>
+    <data name="TutorialStepRewatchTitle" xml:space="preserve">
+        <value>Re-watch Tutorial</value>
+    </data>
+    <data name="TutorialStepRewatchDesc" xml:space="preserve">
+        <value>If you need to review this tutorial later, you can find the "Tutorial" button at the bottom of Settings → About page to re-watch it anytime.</value>
+    </data>
+    <data name="Tutorial" xml:space="preserve">
+        <value>Tutorial</value>
+    </data>
+    <data name="SpecialTask" xml:space="preserve">
+        <value>Special Tasks</value>
+    </data>
+    <data name="SpecialTask_Countdown" xml:space="preserve">
+        <value>Countdown</value>
+    </data>
+    <data name="SpecialTask_TimedWait" xml:space="preserve">
+        <value>Timed Wait</value>
+    </data>
+    <data name="SpecialTask_Toast" xml:space="preserve">
+        <value>Toast Notification</value>
+    </data>
+    <data name="SpecialTask_CustomProgram" xml:space="preserve">
+        <value>Custom Program</value>
+    </data>
+    <data name="SpecialTask_KillProcess" xml:space="preserve">
+        <value>Kill Process</value>
+    </data>
+    <data name="SpecialTask_ComputerOperation" xml:space="preserve">
+        <value>Computer Operation</value>
+    </data>
+    <data name="SpecialTask_Webhook" xml:space="preserve">
+        <value>Webhook</value>
+    </data>
+    <data name="SpecialTask_CountdownDesc" xml:space="preserve">
+        <value>Continues to the next task after the specified seconds, supports `1~86400` seconds (24 hours), useful for adding delays between tasks.</value>
+    </data>
+    <data name="SpecialTask_TimedWaitDesc" xml:space="preserve">
+        <value>Pauses the task queue until a specified time of day (hour:minute). If the time has already passed today, waits until that time tomorrow.</value>
+    </data>
+    <data name="SpecialTask_ToastDesc" xml:space="preserve">
+        <value>Displays a toast notification with a custom message, useful for alerting when a certain point in the task queue is reached.</value>
+    </data>
+    <data name="SpecialTask_CustomProgramDesc" xml:space="preserve">
+        <value>Launches an external program or script, supports specifying program path and startup arguments, can optionally wait for the program to exit before continuing.</value>
+    </data>
+    <data name="SpecialTask_KillProcessDesc" xml:space="preserve">
+        <value>Terminates a running process by name, useful for closing games or other applications as part of the task flow.</value>
+    </data>
+    <data name="SpecialTask_ComputerOperationDesc" xml:space="preserve">
+        <value>Performs a system-level operation such as shutdown, restart, sleep or hibernate, useful for automated power management after long task runs.</value>
+    </data>
+    <data name="SpecialTask_WebhookDesc" xml:space="preserve">
+        <value>Sends an HTTP request to a specified URL with custom request body, useful for integrating with external services or automation platforms.</value>
+    </data>
+    <data name="SpecialTask_CountdownSeconds" xml:space="preserve">
+        <value>Countdown (seconds)</value>
+    </data>
+    <data name="SpecialTask_WaitUntilTime" xml:space="preserve">
+        <value>Wait until (HH:MM)</value>
+    </data>
+    <data name="SpecialTask_NotificationTitle" xml:space="preserve">
+        <value>Notification Title</value>
+    </data>
+    <data name="SpecialTask_NotificationContent" xml:space="preserve">
+        <value>Notification Content</value>
+    </data>
+    <data name="SpecialTask_ProgramPath" xml:space="preserve">
+        <value>Program Path</value>
+    </data>
+    <data name="SpecialTask_Arguments" xml:space="preserve">
+        <value>Arguments</value>
+    </data>
+    <data name="SpecialTask_WaitForExit" xml:space="preserve">
+        <value>Wait for Exit</value>
+    </data>
+    <data name="SpecialTask_ProcessName" xml:space="preserve">
+        <value>Process Name</value>
+    </data>
+    <data name="SpecialTask_OperationType" xml:space="preserve">
+        <value>Operation Type</value>
+    </data>
+    <data name="SpecialTask_RequestMethod" xml:space="preserve">
+        <value>Request Method</value>
+    </data>
+    <data name="SpecialTask_RequestBody" xml:space="preserve">
+        <value>Request Body</value>
+    </data>
+    <data name="SpecialTask_SelectProgram" xml:space="preserve">
+        <value>Select Program</value>
+    </data>
+    <data name="SpecialTask_ProcessNameExample" xml:space="preserve">
+        <value>e.g.: notepad</value>
+    </data>
+    <data name="SpecialTask_Shutdown" xml:space="preserve">
+        <value>Shutdown</value>
+    </data>
+    <data name="SpecialTask_Restart" xml:space="preserve">
+        <value>Restart</value>
+    </data>
+    <data name="SpecialTask_Sleep" xml:space="preserve">
+        <value>Sleep</value>
+    </data>
+    <data name="SpecialTask_Hibernate" xml:space="preserve">
+        <value>Hibernate</value>
+    </data>
+    <data name="InstanceSelectTooltip" xml:space="preserve">
+        <value>Select Instance</value>
+    </data>
+    <data name="InstanceAddTooltip" xml:space="preserve">
+        <value>Add Instance</value>
+    </data>
+    <data name="InstanceCannotCloseLast" xml:space="preserve">
+        <value>Cannot close the last instance</value>
+    </data>
+    <data name="InstanceRunningCloseConfirm" xml:space="preserve">
+        <value>Instance is running. Are you sure you want to stop and close it?</value>
+    </data>
+    <data name="InstanceCloseTitle" xml:space="preserve">
+        <value>Close Instance</value>
+    </data>
+    <data name="InstanceRunningCannotClose" xml:space="preserve">
+        <value>This instance is running. Please stop the task before closing.</value>
+    </data>
+    <data name="InstanceTimerReassigned" xml:space="preserve">
+        <value>Instance "{0}" has been closed. Its scheduled tasks have been reassigned to another instance.</value>
+    </data>
+    <data name="MonitorSortDefault" xml:space="preserve">
+        <value>Default</value>
+    </data>
+    <data name="MonitorSortByStatus" xml:space="preserve">
+        <value>By Status</value>
+    </data>
+    <data name="MonitorSortByName" xml:space="preserve">
+        <value>By Name</value>
+    </data>
+    <data name="MonitorSortByCreatedTime" xml:space="preserve">
+        <value>By Created Time</value>
+    </data>
+    <data name="AddTimer" xml:space="preserve">
+        <value>Add Timer</value>
+    </data>
+    <data name="RemoveTimer" xml:space="preserve">
+        <value>Remove Timer</value>
     </data>
 </root>
 

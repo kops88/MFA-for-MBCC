@@ -2,6 +2,8 @@ using MFAAvalonia.Configuration;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.ValueType;
 using MFAAvalonia.ViewModels.Other;
+using MFAAvalonia.ViewModels.Pages;
+using MFAAvalonia.ViewModels.UsersControls.Settings;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -14,7 +16,7 @@ namespace MFAAvalonia.Extensions.MaaFW;
 /// <summary>
 /// 任务加载器
 /// </summary>
-public class TaskLoader(MaaInterface? maaInterface)
+public class TaskLoader(MaaInterface? maaInterface, TaskQueueViewModel taskQueueViewModel)
 {
     public const string NEW_SEPARATOR = "<|||>";
     public const string OLD_SEPARATOR = ":";
@@ -29,7 +31,10 @@ public class TaskLoader(MaaInterface? maaInterface)
         ref bool firstTask,
         IList<DragItemViewModel>? oldDrags = null)
     {
-        var currentTasks = ConfigurationManager.Current.GetValue(ConfigurationKeys.CurrentTasks, new List<string>());
+        var instanceConfig = taskQueueViewModel.Processor.InstanceConfiguration;
+
+        var currentTasks = instanceConfig.GetValue(ConfigurationKeys.CurrentTasks, new List<string>());
+
         if (currentTasks.Any(t => t.Contains(OLD_SEPARATOR) && !t.Contains(NEW_SEPARATOR)))
         {
             currentTasks = currentTasks
@@ -50,8 +55,8 @@ public class TaskLoader(MaaInterface? maaInterface)
         }
         else
         {
-            var items = ConfigurationManager.Current.GetValue(ConfigurationKeys.TaskItems, new List<MaaInterface.MaaInterfaceTask>()) ?? new List<MaaInterface.MaaInterfaceTask>();
-            drags = items.Select(interfaceItem => new DragItemViewModel(interfaceItem)).ToList();
+            var items = instanceConfig.GetValue(ConfigurationKeys.TaskItems, new List<MaaInterface.MaaInterfaceTask>()) ?? new List<MaaInterface.MaaInterfaceTask>();
+            drags = items.Select(interfaceItem => new DragItemViewModel(interfaceItem) { OwnerViewModel = taskQueueViewModel }).ToList();
         }
 
         if (firstTask)
@@ -61,9 +66,22 @@ public class TaskLoader(MaaInterface? maaInterface)
         }
 
         var (updateList, removeList) = SynchronizeTaskItems(ref currentTasks, drags, tasks);
-        ConfigurationManager.Current.SetValue(ConfigurationKeys.CurrentTasks, currentTasks);
+
+        instanceConfig.SetValue(ConfigurationKeys.CurrentTasks, currentTasks);
         
         updateList.RemoveAll(d => removeList.Contains(d));
+
+        // 同步保存 TaskItems，确保多实例 fallback 时 CurrentTasks 和 TaskItems 一致
+        // 避免非默认实例通过 fallback 读到已更新的 CurrentTasks 但旧的 TaskItems，
+        // 导致新任务被误判为"已删除"
+        // interface 加载失败时 maaInterface?.Task 为 null，此时不保存以免清空配置
+        // 注意：必须用 .ToList() 物化 LINQ 查询，否则存入 Config 字典的是懒惰 IEnumerable，
+        // 后续 GetValue<List<T>> 无法通过类型转换读取，会返回空列表
+        if (maaInterface?.Task != null)
+        {
+            instanceConfig.SetValue(ConfigurationKeys.TaskItems,
+                updateList.Where(m => !m.IsResourceOptionItem).Select(m => m.InterfaceItem).ToList());
+        }
 
         UpdateViewModels(updateList, tasks, tasksSource);
     }
@@ -91,12 +109,12 @@ public class TaskLoader(MaaInterface? maaInterface)
         {
             resource.InitializeDisplayName();
             // 初始化资源的 SelectOptions
-            InitializeResourceSelectOptions(resource);
+            InitializeResourceSelectOptions(resource, maaInterface, taskQueueViewModel.Processor.InstanceConfiguration);
         }
-        Instances.TaskQueueViewModel.CurrentResources = new ObservableCollection<MaaInterface.MaaInterfaceResource>(filteredResources);
-        Instances.TaskQueueViewModel.CurrentResource = ConfigurationManager.Current.GetValue(ConfigurationKeys.Resource, string.Empty);
-        if (Instances.TaskQueueViewModel.CurrentResources.Count > 0 && Instances.TaskQueueViewModel.CurrentResources.All(r => r.Name != Instances.TaskQueueViewModel.CurrentResource))
-            Instances.TaskQueueViewModel.CurrentResource = Instances.TaskQueueViewModel.CurrentResources[0].Name ?? "Default";
+        taskQueueViewModel.CurrentResources = new ObservableCollection<MaaInterface.MaaInterfaceResource>(filteredResources);
+        taskQueueViewModel.CurrentResource = taskQueueViewModel.Processor.InstanceConfiguration.GetValue(ConfigurationKeys.Resource, string.Empty);
+        if (taskQueueViewModel.CurrentResources.Count > 0 && taskQueueViewModel.CurrentResources.All(r => r.Name != taskQueueViewModel.CurrentResource))
+            taskQueueViewModel.CurrentResource = taskQueueViewModel.CurrentResources[0].Name ?? "Default";
     }
 
     /// <summary>
@@ -104,7 +122,7 @@ public class TaskLoader(MaaInterface? maaInterface)
     /// 只初始化顶级选项，子选项会在运行时由 UpdateSubOptions 动态创建
     /// 会保留已有的值并从配置中恢复保存的值
     /// </summary>
-    private void InitializeResourceSelectOptions(MaaInterface.MaaInterfaceResource resource)
+    public static void InitializeResourceSelectOptions(MaaInterface.MaaInterfaceResource resource, MaaInterface? maaInterface, InstanceConfiguration config)
     {
         if (resource.Option == null || resource.Option.Count == 0)
         {
@@ -135,7 +153,7 @@ public class TaskLoader(MaaInterface? maaInterface)
         }
 
         // 获取已保存的配置
-        var savedResourceOptions = ConfigurationManager.Current.GetValue(
+        var savedResourceOptions = config.GetValue(
             ConfigurationKeys.ResourceOptionItems,
             new Dictionary<string, List<MaaInterface.MaaInterfaceSelectOption>>());
 
@@ -200,9 +218,13 @@ public class TaskLoader(MaaInterface? maaInterface)
     /// <summary>
     /// 获取当前控制器的名称
     /// </summary>
-    private string? GetCurrentControllerName()
+    public string? GetCurrentControllerName()
     {
-        var currentControllerType = Instances.TaskQueueViewModel.CurrentController;
+        return GetControllerName(taskQueueViewModel.CurrentController, maaInterface);
+    }
+
+    public static string? GetControllerName(MaaControllerTypes currentControllerType, MaaInterface? maaInterface)
+    {
         var controllerTypeKey = currentControllerType.ToJsonKey();
 
         // 从 interface 的 controller 配置中查找匹配的控制器
@@ -243,7 +265,8 @@ public class TaskLoader(MaaInterface? maaInterface)
         IList<DragItemViewModel> drags,
         List<MaaInterface.MaaInterfaceTask> tasks)
     {
-        var currentTaskSet = currentTasks;
+        // 使用 HashSet 去重，解决 currentTasks 可能存在重复项的问题
+        var currentTaskSet = new HashSet<string>(currentTasks);
 
         var removeList = new List<DragItemViewModel>();
         var updateList = new List<DragItemViewModel>();
@@ -276,37 +299,61 @@ public class TaskLoader(MaaInterface? maaInterface)
                 continue;
             }
 
+            // 特殊任务（如倒计时、系统通知等）不在 interface 定义中，但需要保留
+            if (!string.IsNullOrWhiteSpace(oldItem.InterfaceItem?.Entry)
+                && AddTaskDialogViewModel.SpecialActionNames.Contains(oldItem.InterfaceItem.Entry!))
+            {
+                // 强制更新 Description 为当前的 i18n key，兼容旧版保存的文本格式
+                oldItem.InterfaceItem.Description = AddTaskDialogViewModel.GetSpecialTaskDescription(oldItem.InterfaceItem.Entry!);
+                updateList.Add(oldItem);
+                continue;
+            }
+
             removeList.Add(oldItem);
         }
 
         var existingKeys = new HashSet<string>(
             updateList.Select(item => $"{item.InterfaceItem?.Name}{NEW_SEPARATOR}{item.InterfaceItem?.Entry}"));
 
+        // 计算用户手动删除的任务集合：
+        // 在 currentTaskSet 中存在（用户见过）但不在 existingKeys 中（不在当前任务列表）的任务
+        var deletedTaskKeys = new HashSet<string>(
+            currentTaskSet.Where(key => !existingKeys.Contains(key)));
+
+        // 用新的 HashSet 重建 currentTasks，确保无重复
+        var newCurrentTasks = new HashSet<string>(existingKeys);
+        // 保留已删除任务的记录，防止重启后被重新添加
+        newCurrentTasks.UnionWith(deletedTaskKeys);
+
         foreach (var task in tasks)
         {
             var historyKey = $"{task.Name}{NEW_SEPARATOR}{task.Entry}";
-            var isNewTask = !currentTaskSet.Contains(historyKey);
-
-            if (!isNewTask)
-            {
-                continue;
-            }
-
+            
             if (existingKeys.Contains(historyKey))
             {
+                newCurrentTasks.Add(historyKey);
                 continue;
             }
-
-            var newItem = new DragItemViewModel(task);
-            if (task.Option != null)
+            
+            // 用户之前见过并手动删除的任务，不再自动添回
+            if (deletedTaskKeys.Contains(historyKey))
             {
-                task.Option.ForEach(option => SetDefaultOptionValue(maaInterface, option));
+                continue;
+            }
+    
+            // 真正的新任务：不在 existingKeys 中，也不在 deletedTaskKeys 中
+            var clonedTask = task.Clone();
+            var newItem = new DragItemViewModel(clonedTask) { OwnerViewModel = taskQueueViewModel };
+            if (clonedTask.Option != null)
+            {
+                clonedTask.Option.ForEach(option => SetDefaultOptionValue(maaInterface, option));
             }
             updateList.Add(newItem);
             existingKeys.Add(historyKey);
-            currentTasks.Add(historyKey);
+            newCurrentTasks.Add(historyKey);
         }
 
+        currentTasks = newCurrentTasks.ToList();
         return (updateList, removeList);
     }
 
@@ -324,6 +371,7 @@ public class TaskLoader(MaaInterface? maaInterface)
         oldItem.InterfaceItem.Document = newItem.Document;
         oldItem.InterfaceItem.Repeatable = newItem.Repeatable;
         oldItem.InterfaceItem.Resource = newItem.Resource;
+        oldItem.InterfaceItem.Controller = newItem.Controller;
         oldItem.InterfaceItem.Icon = newItem.Icon;
 
         // 更新图标
@@ -331,10 +379,8 @@ public class TaskLoader(MaaInterface? maaInterface)
         oldItem.ResolvedIcon = oldItem.InterfaceItem.ResolvedIcon;
         oldItem.HasIcon = oldItem.InterfaceItem.HasIcon;
 
-        // 更新显示名称
-        oldItem.Name = LanguageHelper.GetLocalizedDisplayName(
-            oldItem.InterfaceItem.DisplayName,
-            oldItem.InterfaceItem.Name ?? LangKeys.Unnamed);
+        // 更新显示名称（保留自定义重命名/备注）
+        oldItem.RefreshDisplayName();
 
         UpdateAdvancedOptions(oldItem, newItem);
         UpdateOptions(oldItem, newItem);
@@ -443,7 +489,8 @@ public class TaskLoader(MaaInterface? maaInterface)
 
     private void UpdateViewModels(IList<DragItemViewModel> drags, List<MaaInterface.MaaInterfaceTask> tasks, ObservableCollection<DragItemViewModel> tasksSource)
     {
-        var newItems = tasks.Select(t => new DragItemViewModel(t)).ToList();
+        // 克隆任务对象，避免多实例共享同一个 MaaInterfaceTask 对象
+        var newItems = tasks.Select(t => new DragItemViewModel(t.Clone()) { OwnerViewModel = taskQueueViewModel }).ToList();
         foreach (var item in newItems)
         {
             if (item.InterfaceItem?.Option != null && !drags.Any())
@@ -451,8 +498,8 @@ public class TaskLoader(MaaInterface? maaInterface)
         }
 
         // 检查当前资源是否有全局选项配置
-        var currentResourceName = Instances.TaskQueueViewModel.CurrentResource;
-        var currentResource = Instances.TaskQueueViewModel.CurrentResources
+        var currentResourceName = taskQueueViewModel.CurrentResource;
+        var currentResource = taskQueueViewModel.CurrentResources
             .FirstOrDefault(r => r.Name == currentResourceName);
 
         // 创建最终的任务列表
@@ -485,14 +532,14 @@ public class TaskLoader(MaaInterface? maaInterface)
             tasksSource.Clear();
             foreach (var item in newItems) tasksSource.Add(item);
 
-            Instances.TaskQueueViewModel.TaskItemViewModels.Clear();
+            taskQueueViewModel.TaskItemViewModels.Clear();
             foreach (var item in finalItems)
             {
-                Instances.TaskQueueViewModel.TaskItemViewModels.Add(item);
+                taskQueueViewModel.TaskItemViewModels.Add(item);
             }
 
             // 根据当前资源更新任务的可见性
-            Instances.TaskQueueViewModel.UpdateTasksForResource(currentResourceName);
+            taskQueueViewModel.UpdateTasksForResource(currentResourceName);
         });
     }
 
@@ -505,7 +552,7 @@ public class TaskLoader(MaaInterface? maaInterface)
             return null;
 
         // 从配置中加载已保存的资源选项
-        var savedResourceOptions = ConfigurationManager.Current.GetValue(
+        var savedResourceOptions = taskQueueViewModel.Processor.InstanceConfiguration.GetValue(
             ConfigurationKeys.ResourceOptionItems,
             new Dictionary<string, List<MaaInterface.MaaInterfaceSelectOption>>());
 
@@ -544,7 +591,7 @@ public class TaskLoader(MaaInterface? maaInterface)
         }
 
         // 创建新的资源设置项
-        var resourceItem = new DragItemViewModel(resource);
+        var resourceItem = new DragItemViewModel(resource) { OwnerViewModel = taskQueueViewModel };
 
         // 设置 IsVisible 为 true，因为资源设置项有选项需要显示
         resourceItem.IsVisible = true;

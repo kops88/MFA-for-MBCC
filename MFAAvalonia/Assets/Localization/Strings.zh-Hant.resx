@@ -1,4 +1,4 @@
-﻿<root>
+﻿ <root>
     <resheader name="resmimetype">
         <value>text/microsoft-resx</value>
     </resheader>
@@ -534,6 +534,9 @@
     <data name="GlobalConfigTip" xml:space="preserve">
         <value>此選項頁為全域配置</value>
     </data>
+    <data name="InstanceConfigTip" xml:space="preserve">
+        <value>此選項頁為實例配置，當前實例：</value>
+    </data>
     <data name="GpuOptionAuto" xml:space="preserve">
         <value>自動</value>
     </data>
@@ -807,8 +810,14 @@
     <data name="RetryOnDisconnected" xml:space="preserve">
         <value>ADB 連線失敗時嘗試啟動模擬器</value>
     </data>
+    <data name="RetryOnDisconnectedWin32" xml:space="preserve">
+        <value>Win32 連線失敗時嘗試啟動遊戲</value>
+    </data>
     <data name="AutoDetectOnConnectionFailed" xml:space="preserve">
         <value>連線失敗時自動重新搜尋可用裝置</value>
+    </data>
+    <data name="AutoConnectAfterRefresh" xml:space="preserve">
+        <value>重新整理裝置列表後自動連線</value>
     </data>
     <data name="RunningSettings" xml:space="preserve">
         <value>執行設定</value>
@@ -981,6 +990,9 @@
     <data name="Timer" xml:space="preserve">
         <value>定時</value>
     </data>
+    <data name="TimerAction" xml:space="preserve">
+        <value>操作類型</value>
+    </data>
     <data name="TimerCustomConfig" xml:space="preserve">
         <value>自定義配置選擇</value>
     </data>
@@ -1001,6 +1013,9 @@
     </data>
     <data name="TryToStartEmulator" xml:space="preserve">
         <value>正在嘗試啟動模擬器</value>
+    </data>
+    <data name="TryToStartGame" xml:space="preserve">
+        <value>正在嘗試啟動遊戲</value>
     </data>
     <data name="UiSettings" xml:space="preserve">
         <value>介面設定</value>
@@ -1113,11 +1128,20 @@
     <data name="MirrorCdkMismatch" xml:space="preserve">
         <value>CDK 類型與資源不匹配</value>
     </data>
+    <data name="Monitor" xml:space="preserve">
+        <value>總控台</value>
+    </data>
     <data name="StartingAgent" xml:space="preserve">
         <value>正在啟動 Agent（耗時可能較久）</value>
     </data>
     <data name="AgentStartFailed" xml:space="preserve">
         <value>Agent啟動失敗</value>
+    </data>
+    <data name="AgentTcpMode" xml:space="preserve">
+        <value>通訊相容模式</value>
+    </data>
+    <data name="AgentTcpModeDescription" xml:space="preserve">
+        <value>若啟動任務後軟體立即閃退，可嘗試開啟。僅限此情況使用，否則會影響運行效率</value>
     </data>
     <data name="AgentExecutableNotFound" xml:space="preserve">
         <value>Agent 可執行文件不存在: {0}</value>
@@ -1476,5 +1500,395 @@
     </data>
     <data name="Reconnect" xml:space="preserve">
         <value>重新連接</value>
+    </data>
+    <data name="TaskRemarkMenu" xml:space="preserve">
+        <value>備註</value>
+    </data>
+    <data name="TaskRemarkTitle" xml:space="preserve">
+        <value>任務備註</value>
+    </data>
+    <data name="TaskRename" xml:space="preserve">
+        <value>重新命名</value>
+    </data>
+    <data name="TaskRenamePlaceholder" xml:space="preserve">
+        <value>輸入自訂顯示名稱（可選）</value>
+    </data>
+    <data name="TaskRemark" xml:space="preserve">
+        <value>備註</value>
+    </data>
+    <data name="TaskRemarkPlaceholder" xml:space="preserve">
+        <value>輸入備註（可選）</value>
+    </data>
+    <data name="PlatformNotSupportedOperation" xml:space="preserve">
+        <value>當前平台不支援該操作</value>
+    </data>
+    <data name="TempDirWarningTitle" xml:space="preserve">
+        <value>程式位置不正確</value>
+    </data>
+    <data name="TempDirWarningMain" xml:space="preserve">
+        <value>你好像直接雙擊壓縮檔裡的程式了</value>
+    </data>
+    <data name="TempDirWarningDesc" xml:space="preserve">
+        <value>程式現在在暫存目錄裡執行著呢，一關掉可能就沒了。先把壓縮檔解壓到一個資料夾裡，再開啟裡面的程式吧。</value>
+    </data>
+    <data name="TempDirWarningHint" xml:space="preserve">
+        <value>小提示：建議解壓到一個專門的資料夾，比如「D:\MFA」，別放桌面或者下載資料夾，那樣更方便管理。</value>
+    </data>
+    <data name="ExitProgram" xml:space="preserve">
+        <value>退出程式</value>
+    </data>
+    <data name="MSVC2022Missing" xml:space="preserve">
+        <value>檢測到缺少運行庫 Runtime，請嘗試下載並安裝最新 Microsoft Visual C++ Redistributable (x64) 運行庫。</value>
+    </data>
+    <data name="MSVC2022DownloadLink" xml:space="preserve">
+        <value>下載連結：https://aka.ms/vs/17/release/vc_redist.x64.exe</value>
+    </data>
+    <data name="DownloadNowConfirmation" xml:space="preserve">
+        <value>是否立即下載？</value>
+    </data>
+    <data name="RuntimeMissingTitle" xml:space="preserve">
+        <value>缺少運行庫</value>
+    </data>
+    <data name="RuntimeMissingWarning" xml:space="preserve">
+        <value>缺少系統組件</value>
+    </data>
+    <data name="RuntimeMissingDescription" xml:space="preserve">
+        <value>MFAAvalonia 需要 Microsoft Visual C++ Redistributable (x64) 才能運行。</value>
+    </data>
+    <data name="DownloadAndInstall" xml:space="preserve">
+        <value>下載並安裝</value>
+    </data>
+    <data name="DownloadingStatus" xml:space="preserve">
+        <value>正在下載執行階段庫...</value>
+    </data>
+    <data name="InstallingStatus" xml:space="preserve">
+        <value>正在等待安裝完成，請在彈出的安裝視窗中完成操作。</value>
+    </data>
+    <data name="InstallSuccess" xml:space="preserve">
+        <value>安裝完成，請重啟應用程式。</value>
+    </data>
+    <data name="DownloadError" xml:space="preserve">
+        <value>錯誤: {0}</value>
+    </data>
+    <data name="Retry" xml:space="preserve">
+        <value>重試</value>
+    </data>
+    <data name="Close" xml:space="preserve">
+        <value>關閉</value>
+    </data>
+    <data name="RuntimeMissingPrompt" xml:space="preserve">
+        <value>點擊下方按鈕自動下載並執行安裝程式，請注意在彈出的視窗中點擊安裝。</value>
+    </data>
+    <data name="AdminPermissionRequired" xml:space="preserve">
+        <value>需要管理員權限</value>
+    </data>
+    <data name="AdminPermissionRequiredDetail" xml:space="preserve">
+        <value>當前控制器需要管理員權限，請以管理員身份重新啟動本程式</value>
+    </data>
+    <data name="FontScaleValue" xml:space="preserve">
+        <value>{0}%</value>
+    </data>
+    <data name="FontScaleTitle" xml:space="preserve">
+        <value>字體大小縮放</value>
+    </data>
+    <data name="FontScaleDescription" xml:space="preserve">
+        <value>調整界面字體的整體縮放比例，所有字體將按比例放大或縮小。</value>
+    </data>
+    <data name="ResourceLayoutUpdatedContent" xml:space="preserve">
+        <value>檢測到資源佈局文件更新，已應用最新佈局並覆蓋當前佈局。</value>
+    </data>
+    <data name="ResourceLayoutUpdatedTitle" xml:space="preserve">
+        <value>資源佈局更新</value>
+    </data>
+    <data name="StartupErrorMessage" xml:space="preserve">
+        <value>{0}失敗
+    
+    錯誤信息：
+    {1}
+    
+    詳細信息：
+    {2}</value>
+    </data>
+    <data name="StartupErrorTitle" xml:space="preserve">
+        <value>啓動失敗</value>
+    </data>
+    <data name="PreventSleep" xml:space="preserve">
+        <value>執行時防止螢幕關閉</value>
+    </data>
+    <data name="Search" xml:space="preserve">
+        <value>搜尋...</value>
+    </data>
+    <data name="TutorialStepConnectTitle" xml:space="preserve">
+        <value>工具列總覽</value>
+    </data>
+    <data name="TutorialStepConnectDesc" xml:space="preserve">
+        <value>這是頂部工具列，包含資源切換、控制器選擇、裝置連接等核心功能。接下來將逐一介紹各區域。</value>
+    </data>
+    <data name="TutorialStepAddTaskTitle" xml:space="preserve">
+        <value>任務清單</value>
+    </data>
+    <data name="TutorialStepAddTaskDesc" xml:space="preserve">
+        <value>這裡顯示已新增的任務。勾選要執行的任務，拖曳可調整順序。點擊每個任務右側的齒輪圖示可進入對應的任務設定。</value>
+    </data>
+    <data name="TutorialStepMultiConfigTitle" xml:space="preserve">
+        <value>管理多個配置</value>
+    </data>
+    <data name="TutorialStepMultiConfigDesc" xml:space="preserve">
+        <value>第三步，透過頂部標籤頁新建或切換不同的配置——例如一個用於日常掛機，另一個用於即時小工具，各配置的任務和裝置設定互相獨立。</value>
+    </data>
+    <data name="TutorialNext" xml:space="preserve">
+        <value>下一步</value>
+    </data>
+    <data name="TutorialPrevious" xml:space="preserve">
+        <value>上一步</value>
+    </data>
+    <data name="TutorialFinish" xml:space="preserve">
+        <value>知道了</value>
+    </data>
+    <data name="TutorialStepTaskOptionsTitle" xml:space="preserve">
+        <value>任務設定</value>
+    </data>
+    <data name="TutorialStepTaskOptionsDesc" xml:space="preserve">
+        <value>此面板顯示所選任務的詳細參數設定。點擊任務清單中不同任務的齒輪圖示，可切換檢視對應的選項。</value>
+    </data>
+    <data name="TutorialStepSettingsTitle" xml:space="preserve">
+        <value>設定</value>
+    </data>
+    <data name="TutorialStepSettingsDesc" xml:space="preserve">
+        <value>點擊左側選單列底部的設定圖示，可以配置軟體的全域選項，包括主題、語言、通知等。</value>
+    </data>
+    <data name="TutorialStepResourceTitle" xml:space="preserve">
+        <value>資源切換</value>
+    </data>
+    <data name="TutorialStepResourceDesc" xml:space="preserve">
+        <value>透過此下拉選單切換不同的資源包。不同資源包可能包含不同的任務集和配置。</value>
+    </data>
+    <data name="TutorialStepControllerTitle" xml:space="preserve">
+        <value>控制器類型</value>
+    </data>
+    <data name="TutorialStepControllerDesc" xml:space="preserve">
+        <value>選擇控制器類型：電腦端、電腦端-備選、電腦端-前台或安卓端等。根據使用場景選擇合適的連接方式。</value>
+    </data>
+    <data name="TutorialStepDeviceTitle" xml:space="preserve">
+        <value>裝置選擇</value>
+    </data>
+    <data name="TutorialStepDeviceDesc" xml:space="preserve">
+        <value>選擇要連接的目標裝置或視窗。下拉選單會顯示目前可用的裝置。</value>
+    </data>
+    <data name="TutorialStepConnectionTitle" xml:space="preserve">
+        <value>連接操作</value>
+    </data>
+    <data name="TutorialStepConnectionDesc" xml:space="preserve">
+        <value>這裡有重新整理裝置清單、重新連接的按鈕，以及連接狀態指示燈（綠色=已連接，紅色=未連接）。點擊「開始任務」即可執行已勾選的任務。</value>
+    </data>
+    <data name="TutorialStepLogTitle" xml:space="preserve">
+        <value>執行日誌</value>
+    </data>
+    <data name="TutorialStepLogDesc" xml:space="preserve">
+        <value>任務執行過程中的日誌訊息會顯示在這裡，方便即時查看執行狀態和排查問題。</value>
+    </data>
+    <data name="TutorialStepSelectAllTitle" xml:space="preserve">
+        <value>全選與全不選</value>
+    </data>
+    <data name="TutorialStepSelectAllDesc" xml:space="preserve">
+        <value>這兩個按鈕可以快速勾選或取消勾選所有任務。左側為「全選」，右側為「全不選」。</value>
+    </data>
+    <data name="TutorialStepAddTaskBtnTitle" xml:space="preserve">
+        <value>新增與重置任務</value>
+    </data>
+    <data name="TutorialStepAddTaskBtnDesc" xml:space="preserve">
+        <value>「新增任務」按鈕可以將新任務加入列表；「重置任務」按鈕可以將任務列表恢復為預設狀態。</value>
+    </data>
+    <data name="TutorialStepResetTaskTitle" xml:space="preserve">
+        <value>開始任務</value>
+    </data>
+    <data name="TutorialStepResetTaskDesc" xml:space="preserve">
+        <value>點擊此按鈕開始執行已勾選的任務。執行中再次點擊可停止任務。</value>
+    </data>
+    <data name="TutorialStepTaskInteractTitle" xml:space="preserve">
+        <value>任務互動技巧</value>
+    </data>
+    <data name="TutorialStepTaskInteractDesc" xml:space="preserve">
+        <value>左鍵點擊核取方塊可勾選/取消任務；右鍵點擊核取方塊可設為「僅執行一次」（半選狀態）。</value>
+    </data>
+    <data name="TutorialStepTaskItemTipTitle" xml:space="preserve">
+        <value>任務項操作</value>
+    </data>
+    <data name="TutorialStepTaskItemTipDesc" xml:space="preserve">
+        <value>右鍵點擊任務項可彈出選單，支援單獨執行、備註和刪除操作。點擊右側設定圖示可查看該任務的詳細參數。</value>
+    </data>
+    <data name="TutorialStepExportLogTitle" xml:space="preserve">
+        <value>匯出日誌</value>
+    </data>
+    <data name="TutorialStepExportLogDesc" xml:space="preserve">
+        <value>點擊此按鈕可以將執行日誌匯出儲存為檔案，方便排查問題或分享給開發者。</value>
+    </data>
+    <data name="TutorialStepSettingsPageTitle" xml:space="preserve">
+        <value>設定頁面</value>
+    </data>
+    <data name="TutorialStepSettingsPageDesc" xml:space="preserve">
+        <value>這是設定頁面。左側或頂部的導覽列可以快速跳轉到不同的設定分類，右側顯示對應分類的詳細設定項。</value>
+    </data>
+    <data name="TutorialStepStartupSettingsTitle" xml:space="preserve">
+        <value>啟動設定</value>
+    </data>
+    <data name="TutorialStepStartupSettingsDesc" xml:space="preserve">
+        <value>在這裡可以設定任務開始前和結束後的自動操作、模擬器/遊戲啟動路徑、啟動參數和等待時間等。</value>
+    </data>
+    <data name="TutorialStepBeforeAfterTaskTitle" xml:space="preserve">
+        <value>啟動前與結束後操作</value>
+    </data>
+    <data name="TutorialStepBeforeAfterTaskDesc" xml:space="preserve">
+        <value>「啟動後操作」可在任務開始前自動執行指定操作（如進入特定介面）；「結束後操作」可在所有任務完成後自動執行（如退出遊戲、關閉模擬器）。</value>
+    </data>
+    <data name="TutorialStepSoftwarePathTitle" xml:space="preserve">
+        <value>設定啟動路徑</value>
+    </data>
+    <data name="TutorialStepSoftwarePathDesc" xml:space="preserve">
+        <value>在此填寫模擬器或遊戲的啟動路徑，實現全自動掛機。注意：需要在「連接操作」中選擇「啟動遊戲」或「啟動並執行」，或在「連接設定」中開啟「連接失敗時嘗試啟動」，啟動路徑才會生效。</value>
+    </data>
+    <data name="TutorialStepRewatchTitle" xml:space="preserve">
+        <value>重新觀看教學</value>
+    </data>
+    <data name="TutorialStepRewatchDesc" xml:space="preserve">
+        <value>如果以後需要再次查看使用教學，可以在「設定」→「關於我們」頁面底部找到「使用教學」按鈕，隨時重新觀看。</value>
+    </data>
+    <data name="Tutorial" xml:space="preserve">
+        <value>使用教學</value>
+    </data>
+    <data name="SpecialTask" xml:space="preserve">
+        <value>特殊任務</value>
+    </data>
+    <data name="SpecialTask_Countdown" xml:space="preserve">
+        <value>倒計時</value>
+    </data>
+    <data name="SpecialTask_TimedWait" xml:space="preserve">
+        <value>定時等待</value>
+    </data>
+     <data name="SpecialTask_Toast" xml:space="preserve">
+         <value>通知</value>
+     </data>
+    <data name="SpecialTask_CustomProgram" xml:space="preserve">
+        <value>自訂程式</value>
+    </data>
+    <data name="SpecialTask_KillProcess" xml:space="preserve">
+        <value>結束進程</value>
+    </data>
+    <data name="SpecialTask_ComputerOperation" xml:space="preserve">
+        <value>電腦操作</value>
+    </data>
+    <data name="SpecialTask_Webhook" xml:space="preserve">
+        <value>Webhook</value>
+    </data>
+    <data name="SpecialTask_CountdownDesc" xml:space="preserve">
+        <value>在指定的秒數後繼續執行下一個任務，支援 `1~86400` 秒（24小時），可用於任務之間的延遲等待。</value>
+    </data>
+    <data name="SpecialTask_TimedWaitDesc" xml:space="preserve">
+        <value>暫停任務佇列，等待到當天指定的時刻（時:分）後再繼續執行，若該時刻已過則等待到次日對應時刻。</value>
+    </data>
+     <data name="SpecialTask_ToastDesc" xml:space="preserve">
+         <value>發送 Toast 通知，可自訂通知內容，適用於任務佇列執行到特定節點時提醒使用者。</value>
+     </data>
+    <data name="SpecialTask_CustomProgramDesc" xml:space="preserve">
+        <value>啟動外部程式或腳本，支援設定程式路徑和啟動參數，可選擇是否等待程式退出後再繼續。</value>
+    </data>
+    <data name="SpecialTask_KillProcessDesc" xml:space="preserve">
+        <value>按名稱終止正在執行的進程，適用於在任務流程中關閉遊戲或其他應用程式。</value>
+    </data>
+    <data name="SpecialTask_ComputerOperationDesc" xml:space="preserve">
+        <value>執行關機、重啟、睡眠或休眠等系統級操作，適用於長時間任務執行後的自動電源管理。</value>
+    </data>
+    <data name="SpecialTask_WebhookDesc" xml:space="preserve">
+        <value>向指定 URL 發送 HTTP 請求，支援自訂請求體，適用於與外部服務或自動化平台整合。</value>
+    </data>
+    <data name="SpecialTask_CountdownSeconds" xml:space="preserve">
+        <value>倒計時（秒）</value>
+    </data>
+    <data name="SpecialTask_WaitUntilTime" xml:space="preserve">
+        <value>等待到（時:分）</value>
+    </data>
+    <data name="SpecialTask_NotificationTitle" xml:space="preserve">
+        <value>通知標題</value>
+    </data>
+    <data name="SpecialTask_NotificationContent" xml:space="preserve">
+        <value>通知內容</value>
+    </data>
+    <data name="SpecialTask_ProgramPath" xml:space="preserve">
+        <value>程式路徑</value>
+    </data>
+    <data name="SpecialTask_Arguments" xml:space="preserve">
+        <value>附加參數</value>
+    </data>
+    <data name="SpecialTask_WaitForExit" xml:space="preserve">
+        <value>等待程式退出</value>
+    </data>
+    <data name="SpecialTask_ProcessName" xml:space="preserve">
+        <value>進程名稱</value>
+    </data>
+    <data name="SpecialTask_OperationType" xml:space="preserve">
+        <value>操作類型</value>
+    </data>
+    <data name="SpecialTask_RequestMethod" xml:space="preserve">
+        <value>請求方法</value>
+    </data>
+    <data name="SpecialTask_RequestBody" xml:space="preserve">
+        <value>請求體</value>
+    </data>
+    <data name="SpecialTask_SelectProgram" xml:space="preserve">
+        <value>選擇程式</value>
+    </data>
+    <data name="SpecialTask_ProcessNameExample" xml:space="preserve">
+        <value>例如: notepad</value>
+    </data>
+    <data name="SpecialTask_Shutdown" xml:space="preserve">
+        <value>關機</value>
+    </data>
+    <data name="SpecialTask_Restart" xml:space="preserve">
+        <value>重啟</value>
+    </data>
+    <data name="SpecialTask_Sleep" xml:space="preserve">
+        <value>睡眠</value>
+    </data>
+    <data name="SpecialTask_Hibernate" xml:space="preserve">
+        <value>休眠</value>
+    </data>
+    <data name="InstanceSelectTooltip" xml:space="preserve">
+        <value>選擇實例</value>
+    </data>
+    <data name="InstanceAddTooltip" xml:space="preserve">
+        <value>新增實例</value>
+    </data>
+    <data name="InstanceCannotCloseLast" xml:space="preserve">
+        <value>無法關閉最後一個實例</value>
+    </data>
+    <data name="InstanceRunningCloseConfirm" xml:space="preserve">
+        <value>實例正在運行，確定要停止並關閉嗎？</value>
+    </data>
+    <data name="InstanceCloseTitle" xml:space="preserve">
+        <value>關閉實例</value>
+    </data>
+    <data name="InstanceRunningCannotClose" xml:space="preserve">
+        <value>實例正在運行中，請先停止任務後再關閉</value>
+    </data>
+    <data name="InstanceTimerReassigned" xml:space="preserve">
+        <value>實例 "{0}" 已關閉，其關聯的定時任務已自動轉移到其他實例</value>
+    </data>
+    <data name="MonitorSortDefault" xml:space="preserve">
+        <value>預設</value>
+    </data>
+    <data name="MonitorSortByStatus" xml:space="preserve">
+        <value>按狀態</value>
+    </data>
+    <data name="MonitorSortByName" xml:space="preserve">
+        <value>按名稱</value>
+    </data>
+    <data name="MonitorSortByCreatedTime" xml:space="preserve">
+        <value>按建立時間</value>
+    </data>
+    <data name="AddTimer" xml:space="preserve">
+        <value>新增定時</value>
+    </data>
+    <data name="RemoveTimer" xml:space="preserve">
+        <value>刪除定時</value>
     </data>
 </root>

@@ -1,18 +1,18 @@
 <!-- markdownlint-disable MD033 MD041 -->
 <div align="center"><img alt="LOGO" src="./docs/images/mfa-logo_512x512.png" width="256" height="256" />
 
-# MFAAvalonia
+# MFAAvalonia 
 
 **🚀 新一代跨平台自动化框架图形界面**
 
 _基于 [Avalonia UI](https://github.com/AvaloniaUI/Avalonia)
 构建的 [MaaFramework](https://github.com/MaaXYZ/MaaFramework) 通用 GUI 解决方案_
 
-[![License](https://img.shields.io/github/license/SweetSmellFox/MFAAvalonia?style=flat-square&color=4a90d9)](./LICENSE)
+[![License](https://img.shields.io/github/license/MaaXYZ/MFAAvalonia?style=flat-square&color=4a90d9)](./LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-%E2%89%A5%2010-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blueviolet?style=flat-square)](https://github.com/SweetSmellFox/MFAAvalonia)
-[![Commit Activity](https://img.shields.io/github/commit-activity/m/SweetSmellFox/MFAAvalonia?style=flat-square&color=00d4aa)](https://github.com/SweetSmellFox/MFAAvalonia/commits)
-[![Stars](https://img.shields.io/github/stars/SweetSmellFox/MFAAvalonia?style=flat-square&color=ffca28)](https://github.com/SweetSmellFox/MFAAvalonia/stargazers)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blueviolet?style=flat-square)](https://github.com/MaaXYZ/MFAAvalonia)
+[![Commit Activity](https://img.shields.io/github/commit-activity/m/MaaXYZ/MFAAvalonia?style=flat-square&color=00d4aa)](https://github.com/MaaXYZ/MFAAvalonia/commits)
+[![Stars](https://img.shields.io/github/stars/MaaXYZ/MFAAvalonia?style=flat-square&color=ffca28)](https://github.com/MaaXYZ/MFAAvalonia/stargazers)
 [![Mirror酱](https://img.shields.io/badge/Mirror%E9%85%B1-%239af3f6?style=flat-square&logo=countingworkspro&logoColor=4f46e5)](https://mirrorchyan.com/zh/projects?rid=MFAAvalonia&source=mfaagh-badge)
 
 ---
@@ -92,7 +92,7 @@ MaaFramework 项目模板已内置 MFAAvalonia，创建项目时自动配置完�
 
 1. **下载发行版**
 
-   从 [Releases](https://github.com/SweetSmellFox/MFAAvalonia/releases) 下载最新版本并解压
+   从 [Releases](https://github.com/MaaXYZ/MFAAvalonia/releases) 下载最新版本并解压
 
 2. **复制资源文件**
    ```
@@ -334,14 +334,14 @@ MFAAvalonia -c 配置名称
 
 感谢所有为 MFAAvalonia 做出贡献的开发者们！
 
-<a href="https://github.com/SweetSmellFox/MFAAvalonia/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=SweetSmellFox/MFAAvalonia&max=1000" alt="Contributors"/>
+<a href="https://github.com/MaaXYZ/MFAAvalonia/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=MaaXYZ/MFAAvalonia&max=1000" alt="Contributors"/>
 </a>
 
 <div align="center">
 **如果这个项目对你有帮助，请给我们一个 ⭐ Star！**
 
-[![Star History Chart](https://api.star-history.com/svg?repos=SweetSmellFox/MFAAvalonia&type=Date)](https://star-history.com/#SweetSmellFox/MFAAvalonia&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=MaaXYZ/MFAAvalonia&type=Date)](https://star-history.com/#MaaXYZ/MFAAvalonia&Date)
 
 </div>
 

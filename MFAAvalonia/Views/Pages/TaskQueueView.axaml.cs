@@ -4,6 +4,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
@@ -14,10 +15,12 @@ using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.ValueType;
 using MFAAvalonia.ViewModels.Pages;
+using MFAAvalonia.ViewModels.UsersControls;
 using MFAAvalonia.Views.UserControls;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using System.ComponentModel;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -30,7 +33,9 @@ using Lang.Avalonia.MarkupExtensions;
 using MaaFramework.Binding;
 using MFAAvalonia.Views.Windows;
 using Newtonsoft.Json.Linq;
-using Timer = System.Timers.Timer;
+using SukiUI.Dialogs;
+using SukiUI.Extensions;
+using System.Threading.Tasks;
 
 namespace MFAAvalonia.Views.Pages;
 
@@ -45,10 +50,34 @@ public partial class TaskQueueView : UserControl
 
     public TaskQueueView()
     {
-        DataContext = Instances.TaskQueueViewModel;
         InitializeComponent();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        UpdateViewModelSubscription(DataContext as TaskQueueViewModel);
+    }
+
+    private TaskQueueViewModel? _subscribedViewModel;
+
+    private void UpdateViewModelSubscription(TaskQueueViewModel? newVm)
+    {
+        if (_subscribedViewModel != null)
+        {
+            _subscribedViewModel.PropertyChanged -= OnTaskQueueViewModelPropertyChanged;
+            _subscribedViewModel.SetOptionRequested -= OnSetOptionRequested;
+        }
+
+        _subscribedViewModel = newVm;
+
+        if (_subscribedViewModel != null)
+        {
+            _subscribedViewModel.PropertyChanged += OnTaskQueueViewModelPropertyChanged;
+            _subscribedViewModel.SetOptionRequested += OnSetOptionRequested;
+        }
     }
 
 // private void UpdateDeviceSelectorLayout()
@@ -172,7 +201,7 @@ public partial class TaskQueueView : UserControl
             return;
         }
 
-        var text = await clipboard.GetTextAsync();
+        var text = await clipboard.TryGetTextAsync();
         if (string.IsNullOrWhiteSpace(text))
         {
             return;
@@ -187,7 +216,7 @@ public partial class TaskQueueView : UserControl
         var name = parts[0];
         var entry = parts[1];
 
-        var source = MaaProcessor.Instance.TasksSource
+        var source = MaaProcessorManager.Instance.Current.TasksSource
             .FirstOrDefault(item => item.InterfaceItem?.Name == name && item.InterfaceItem?.Entry == entry);
 
         if (source?.InterfaceItem == null)
@@ -222,7 +251,8 @@ public partial class TaskQueueView : UserControl
         }
 
         vm.TaskItemViewModels.Insert(insertIndex, output);
-        ConfigurationManager.Current.SetValue(ConfigurationKeys.TaskItems, vm.TaskItemViewModels.ToList().Select(model => model.InterfaceItem));
+        vm.Processor.InstanceConfiguration.SetValue(ConfigurationKeys.TaskItems,
+            vm.TaskItemViewModels.Where(m => !m.IsResourceOptionItem).Select(model => model.InterfaceItem));
         listBox.SelectedItem = output;
         ToastHelper.Info(LangKeys.Tip.ToLocalization(), LangKeys.TaskAddedToast.ToLocalizationFormatted(false, output.Name));
     }
@@ -234,6 +264,40 @@ public partial class TaskQueueView : UserControl
         {
             DeleteTaskItem(taskItemViewModel);
         }
+    }
+
+    private void EditTaskRemark(object? sender, RoutedEventArgs e)
+    {
+        var menuItem = sender as MenuItem;
+        if (menuItem?.DataContext is not DragItemViewModel taskItemViewModel || DataContext is not TaskQueueViewModel vm)
+        {
+            return;
+        }
+
+        if (taskItemViewModel.IsResourceOptionItem || taskItemViewModel.InterfaceItem == null)
+        {
+            return;
+        }
+
+        var interfaceItem = taskItemViewModel.InterfaceItem;
+
+        Instances.DialogManager.CreateDialog()
+            .WithTitle(LangKeys.TaskRemarkTitle.ToLocalization())
+            .WithViewModel(dialog => new TaskRemarkDialogViewModel(
+                dialog,
+                interfaceItem.DisplayNameOverride,
+                interfaceItem.Remark,
+                (displayNameOverride, remark) =>
+                {
+                    interfaceItem.DisplayNameOverride = string.IsNullOrWhiteSpace(displayNameOverride) ? null : displayNameOverride;
+                    interfaceItem.Remark = string.IsNullOrWhiteSpace(remark) ? null : remark;
+                    taskItemViewModel.RefreshDisplayName();
+
+                    vm.Processor.InstanceConfiguration.SetValue(ConfigurationKeys.TaskItems,
+                        vm.TaskItemViewModels.Where(m => !m.IsResourceOptionItem)
+                            .Select(model => model.InterfaceItem));
+                }))
+            .TryShow();
     }
 
     private void DeleteTaskItem(DragItemViewModel taskItemViewModel)
@@ -257,8 +321,25 @@ public partial class TaskQueueView : UserControl
 
         var deletedName = taskItemViewModel.Name;
         vm.TaskItemViewModels.RemoveAt(index);
-        Instances.TaskQueueView.SetOption(taskItemViewModel, false);
-        ConfigurationManager.Current.SetValue(ConfigurationKeys.TaskItems, vm.TaskItemViewModels.ToList().Select(model => model.InterfaceItem));
+        this.SetOption(taskItemViewModel, false);
+
+        var instanceConfig = vm.Processor.InstanceConfiguration;
+
+        // 保存 TaskItems 时过滤掉 resource option items（与 SaveConfiguration 保持一致）
+        instanceConfig.SetValue(ConfigurationKeys.TaskItems,
+            vm.TaskItemViewModels.Where(m => !m.IsResourceOptionItem).Select(m => m.InterfaceItem));
+
+        // 同步更新 CurrentTasks：确保被删除任务的 key 保留在 CurrentTasks 中，
+        // 这样 SynchronizeTaskItems 的 deletedTaskKeys 计算（currentTaskSet - existingKeys）
+        // 才能正确识别该任务是"用户已见过但手动删除"的，而非"从未见过的新任务"
+        var deletedKey = $"{taskItemViewModel.InterfaceItem?.Name}{TaskLoader.NEW_SEPARATOR}{taskItemViewModel.InterfaceItem?.Entry}";
+        var currentTasks = instanceConfig.GetValue(ConfigurationKeys.CurrentTasks, new List<string>()) ?? new List<string>();
+        if (!currentTasks.Contains(deletedKey))
+        {
+            currentTasks.Add(deletedKey);
+            instanceConfig.SetValue(ConfigurationKeys.CurrentTasks, currentTasks);
+        }
+
         vm.ShowSettings = false;
         ToastHelper.Info(LangKeys.Tip.ToLocalization(), LangKeys.TaskDeletedToast.ToLocalizationFormatted(false, deletedName));
     }
@@ -268,7 +349,7 @@ public partial class TaskQueueView : UserControl
         var menuItem = sender as MenuItem;
         if (menuItem?.DataContext is DragItemViewModel taskItemViewModel && DataContext is TaskQueueViewModel vm)
         {
-            MaaProcessor.Instance.Start([taskItemViewModel]);
+            vm.Processor.Start([taskItemViewModel]);
         }
     }
 
@@ -291,13 +372,13 @@ public partial class TaskQueueView : UserControl
             // 筛选：从当前任务开始，往后所有 IsChecked = true 且支持当前资源包的任务
             var tasksToRun = vm.TaskItemViewModels
                 .Skip(currentTaskIndex) // 跳过当前任务之前的所有项
-                .Where(task => task.IsChecked && task.IsResourceSupported) // 只保留已勾选且支持当前资源包的任务
+                .Where(task => task.IsChecked && task.IsTaskSupported) // 只保留已勾选且支持当前资源包/控制器的任务
                 .ToList(); // 转为列表（避免枚举多次）
 
             // 有需要运行的任务才调用 Start（避免空集合无效调用）
             if (tasksToRun.Any())
             {
-                MaaProcessor.Instance.Start(tasksToRun);
+                vm.Processor.Start(tasksToRun);
             }
         }
     }
@@ -306,10 +387,10 @@ public partial class TaskQueueView : UserControl
 
     #region 任务选项
 
-    private static readonly ConcurrentDictionary<string, Control> CommonPanelCache = new();
-    private static readonly ConcurrentDictionary<string, Control> AdvancedPanelCache = new();
-    private static readonly ConcurrentDictionary<string, string> IntroductionsCache = new();
-    private static readonly ConcurrentDictionary<string, bool> ShowCache = new();
+    private readonly ConcurrentDictionary<string, Control> CommonPanelCache = new();
+    private readonly ConcurrentDictionary<string, Control> AdvancedPanelCache = new();
+    private readonly ConcurrentDictionary<string, string> IntroductionsCache = new();
+    private readonly ConcurrentDictionary<string, bool> ShowCache = new();
 
     public void ResetOptionPanels()
     {
@@ -367,15 +448,17 @@ public partial class TaskQueueView : UserControl
 
     public void SetOption(DragItemViewModel dragItem, bool value, bool init = false)
     {
+        if (DataContext is not TaskQueueViewModel vm) return;
+
         if (!init)
-            Instances.TaskQueueViewModel.IsCommon = true;
+            vm.IsCommon = true;
 
         // 竖屏模式下，打开 Popup 而不是在左侧面板显示
-        if (Instances.TaskQueueViewModel.IsCompactMode && value && !init)
+        if (vm.IsCompactMode && value && !init)
         {
             // 先生成设置面板内容到 Popup 中
             SetOptionToPopup(dragItem);
-            Instances.TaskQueueViewModel.OpenSettingsPopup();
+            vm.OpenSettingsPopup();
             return;
         }
         // 资源设置项使用特殊的缓存键
@@ -391,7 +474,7 @@ public partial class TaskQueueView : UserControl
 
         HideAllPanels();
         var juggle = dragItem.InterfaceItem is { Advanced: { Count: > 0 }, Option: { Count: > 0 } };
-        Instances.TaskQueueViewModel.ShowSettings = juggle;
+        vm.ShowSettings = juggle;
         // 处理资源设置项的选项
         if (dragItem.IsResourceOptionItem)
         {
@@ -401,7 +484,8 @@ public partial class TaskQueueView : UserControl
                 var newPanel = CommonPanelCache.GetOrAdd(cacheKey, key =>
                 {
                     var p = new StackPanel();
-                    GenerateResourceOptionPanelContent(p, dragItem);
+                    new TaskOptionGenerator(vm, SaveConfiguration).GenerateResourceOptionPanelContent(p, dragItem);
+                    // GenerateResourceOptionPanelContent(p, dragItem);
                     CommonOptionSettings.Children.Add(p);
                     return p;
                 });
@@ -416,7 +500,8 @@ public partial class TaskQueueView : UserControl
                 var newPanel = CommonPanelCache.GetOrAdd(cacheKey, key =>
                 {
                     var p = new StackPanel();
-                    GeneratePanelContent(p, dragItem);
+                    new TaskOptionGenerator(vm, SaveConfiguration).GeneratePanelContent(p, dragItem);
+                    // GeneratePanelContent(p, dragItem);
                     CommonOptionSettings.Children.Add(p);
                     return p;
                 });
@@ -429,7 +514,8 @@ public partial class TaskQueueView : UserControl
                     var commonPanel = CommonPanelCache.GetOrAdd(cacheKey, key =>
                     {
                         var p = new StackPanel();
-                        GenerateCommonPanelContent(p, dragItem);
+                        new TaskOptionGenerator(vm, SaveConfiguration).GenerateCommonPanelContent(p, dragItem);
+                        // GenerateCommonPanelContent(p, dragItem);
                         CommonOptionSettings.Children.Add(p);
                         return p;
                     });
@@ -438,7 +524,8 @@ public partial class TaskQueueView : UserControl
                 var advancedPanel = AdvancedPanelCache.GetOrAdd(cacheKey, key =>
                 {
                     var p = new StackPanel();
-                    GenerateAdvancedPanelContent(p, dragItem);
+                    new TaskOptionGenerator(vm, SaveConfiguration).GenerateAdvancedPanelContent(p, dragItem);
+                    // GenerateAdvancedPanelContent(p, dragItem);
                     AdvancedOptionSettings.Children.Add(p);
                     return p;
                 });
@@ -508,7 +595,7 @@ public partial class TaskQueueView : UserControl
         //     : $"{dragItem.Name}_{dragItem.InterfaceItem?.Entry}_{dragItem.InterfaceItem?.GetHashCode()}";
         //
         // var juggle = dragItem.InterfaceItem is { Advanced: { Count: > 0 }, Option: { Count: > 0 } };
-        // Instances.TaskQueueViewModel.ShowSettings = juggle;
+        // // Instances.TaskQueueViewModel.ShowSettings = juggle;
         //
         // // 处理资源设置项的选项
         // if (dragItem.IsResourceOptionItem)
@@ -542,13 +629,13 @@ public partial class TaskQueueView : UserControl
         //     return ConvertCustomMarkup(input ?? string.Empty);
         // });
 
-        // Instances.TaskQueueViewModel.HasPopupIntroduction = !string.IsNullOrWhiteSpace(introduction);
-        // Instances.TaskQueueViewModel.PopupIntroductionContent = introduction;
+        // // Instances.TaskQueueViewModel.HasPopupIntroduction = !string.IsNullOrWhiteSpace(introduction);
+        // // Instances.TaskQueueViewModel.PopupIntroductionContent = introduction;
         //
         // // 检查是否有设置选项
         // bool hasSettings = PopupCommonOptionSettings.Children.Count > 0
         //     || PopupAdvancedOptionSettings.Children.Count > 0;
-        // Instances.TaskQueueViewModel.HasPopupSettings = hasSettings;
+        // // Instances.TaskQueueViewModel.HasPopupSettings = hasSettings;
 
     }
 
@@ -1485,6 +1572,13 @@ public partial class TaskQueueView : UserControl
         if (!string.IsNullOrWhiteSpace(description))
         {
             var result = description.ResolveContentAsync(transform: false).GetAwaiter().GetResult();
+            // 如果结果与输入相同（未被解析），尝试通过 resx i18n 系统解析（支持特殊任务描述等）
+            if (result == description)
+            {
+                var localized = description.ToLocalization();
+                if (localized != description)
+                    return localized;
+            }
             return result;
         }
 
@@ -2105,26 +2199,30 @@ public partial class TaskQueueView : UserControl
 
     private void SaveConfiguration()
     {
+        if (DataContext is not TaskQueueViewModel vm) return;
+
+        var instanceConfig = vm.Processor.InstanceConfiguration;
+
         // 保存普通任务项配置
-        ConfigurationManager.Current.SetValue(ConfigurationKeys.TaskItems,
-            Instances.TaskQueueViewModel.TaskItemViewModels.Where(m => !m.IsResourceOptionItem).Select(m => m.InterfaceItem));
+        instanceConfig.SetValue(ConfigurationKeys.TaskItems,
+            vm.TaskItemViewModels.Where(m => !m.IsResourceOptionItem).Select(m => m.InterfaceItem));
 
         // 保存资源选项配置
-        SaveResourceOptionConfiguration();
+        SaveResourceOptionConfiguration(vm);
     }
 
     /// <summary>
     /// 保存资源选项配置到配置文件
     /// </summary>
-    private void SaveResourceOptionConfiguration()
+    private void SaveResourceOptionConfiguration(TaskQueueViewModel vm)
     {
-        var resourceOptionItems = Instances.TaskQueueViewModel.TaskItemViewModels
+        var resourceOptionItems = vm.TaskItemViewModels
             .Where(m => m.IsResourceOptionItem && m.ResourceItem?.SelectOptions != null)
             .ToDictionary(
                 m => m.ResourceItem!.Name ?? string.Empty,
                 m => m.ResourceItem!.SelectOptions!);
 
-        ConfigurationManager.Current.SetValue(ConfigurationKeys.ResourceOptionItems, resourceOptionItems);
+        vm.Processor.InstanceConfiguration.SetValue(ConfigurationKeys.ResourceOptionItems, resourceOptionItems);
     }
 
     public static string ConvertCustomMarkup(string input, string outputFormat = "html")
@@ -2326,8 +2424,9 @@ public partial class TaskQueueView : UserControl
 
     private void RefreshCurrentIntroduction()
     {
-        var dragItem = Instances.TaskQueueViewModel?.TaskItemViewModels
-            .FirstOrDefault(item => item.EnableSetting);
+        if (DataContext is not TaskQueueViewModel vm) return;
+
+        var dragItem = vm.TaskItemViewModels.FirstOrDefault(item => item.EnableSetting);
         if (dragItem == null)
         {
             return;
@@ -2342,7 +2441,7 @@ public partial class TaskQueueView : UserControl
         var introduction = dragItem.IsResourceOptionItem
             ? ConvertCustomMarkup(dragItem.ResourceItem?.Description ?? string.Empty)
             : ConvertCustomMarkup(GetTooltipText(dragItem.InterfaceItem?.Description, dragItem.InterfaceItem?.Document) ?? string.Empty);
-        Console.WriteLine(introduction);
+
         IntroductionsCache.AddOrUpdate(cacheKey, introduction, (_, _) => introduction);
         SetMarkDown(introduction);
 
@@ -2359,9 +2458,6 @@ public partial class TaskQueueView : UserControl
 
     #region 实时图像
 
-    private readonly Timer _liveViewTimer = new();
-    private bool _liveViewTimerStarted;
-
     private void OnTaskQueueViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(TaskQueueViewModel.IsLiveViewVisible))
@@ -2376,131 +2472,8 @@ public partial class TaskQueueView : UserControl
         }
     }
 
-    // private void ApplyLiveViewCardState()
-    // {
-    //     if (LiveViewCard == null || LogCard == null)
-    //     {
-    //         return;
-    //     }
-    //
-    //     var viewModel = Instances.TaskQueueViewModel;
-    //     if (viewModel == null)
-    //     {
-    //         return;
-    //     }
-    //
-    //     var grid = TaskQueueDashboardGrid;
-    //     if (grid != null && grid.HasSavedLayout())
-    //     {
-    //         return;
-    //     }
-    //
-    //     var rows = grid?.Rows ?? 6;
-    //
-    //     if (!viewModel.IsLiveViewVisible)
-    //     {
-    //         LiveViewCard.IsCollapsed = true;
-    //         LiveViewCard.IsDragEnabled = true;
-    //         LiveViewCard.IsResizeEnabled = true;
-    //
-    //         LogCard.GridRow = 3;
-    //         LogCard.GridRowSpan = 3;
-    //         LogCard.ExpandedRowSpan = 3;
-    //         return;
-    //     }
-    //
-    //     LiveViewCard.IsDragEnabled = true;
-    //     LiveViewCard.IsResizeEnabled = true;
-    //
-    //     var desiredRowSpan = Math.Max(1, LiveViewCard.ExpandedRowSpan);
-    //     var maxRowSpan = Math.Max(1, rows - LiveViewCard.GridRow);
-    //     var newRowSpan = Math.Min(desiredRowSpan, maxRowSpan);
-    //
-    //     LiveViewCard.GridRowSpan = newRowSpan;
-    //     LiveViewCard.ExpandedRowSpan = newRowSpan;
-    //
-    //     var logRow = LiveViewCard.GridRow + LiveViewCard.GridRowSpan;
-    //     if (logRow < rows)
-    //     {
-    //         LogCard.GridRow = logRow;
-    //         LogCard.GridRowSpan = Math.Max(1, rows - logRow);
-    //         LogCard.ExpandedRowSpan = LogCard.GridRowSpan;
-    //     }
-    // }
-
-    private void StartLiveViewLoop()
-    {
-        if (_liveViewTimerStarted)
-            return;
-
-        _liveViewTimer.Elapsed += OnLiveViewTimerElapsed;
-        UpdateLiveViewTimerInterval();
-        _liveViewTimer.Start();
-        _liveViewTimerStarted = true;
-    }
-
-    public void StopLiveViewLoop()
-    {
-        if (!_liveViewTimerStarted)
-            return;
-
-        _liveViewTimer.Stop();
-        _liveViewTimer.Elapsed -= OnLiveViewTimerElapsed;
-        _liveViewTimerStarted = false;
-    }
-
-    private void UpdateLiveViewTimerInterval()
-    {
-        var interval = Instances.TaskQueueViewModel.GetLiveViewRefreshInterval();
-        _liveViewTimer.Interval = Math.Max(1, interval * 1000);
-    }
-
-    private void OnLiveViewTimerElapsed(object? sender, EventArgs e)
-    {
-        try
-        {
-            if (MaaProcessor.IsClosed)
-                return;
-
-            if (MaaProcessor.Instance.TryConsumeScreencapFailureLog(out var shouldAbort, out var shouldDisconnected))
-            {
-                if (shouldAbort)
-                {
-                    RootView.AddLogByKey(LangKeys.ScreencapTimeoutAbort, Brushes.OrangeRed, changeColor: false);
-                }
-                if (shouldDisconnected)
-                {
-                    RootView.AddLogByKey(LangKeys.ScreencapTimeoutDisconnected, Brushes.OrangeRed, changeColor: false);
-                }
-            }
-            if (!Instances.TaskQueueViewModel.IsLiveViewExpanded)
-                return;
-            if (Instances.TaskQueueViewModel.EnableLiveView && Instances.TaskQueueViewModel.IsConnected)
-            {
-                var status = MaaProcessor.Instance.PostScreencap();
-                if (MaaProcessor.Instance.HandleScreencapStatus(status, false))
-                {
-                    return;
-                }
-
-                var buffer = MaaProcessor.Instance.GetLiveViewBuffer(false);
-                if (buffer == null) return;
-                _ = Instances.TaskQueueViewModel.UpdateLiveViewImageAsync(buffer);
-            }
-            else
-            {
-                _ = Instances.TaskQueueViewModel.UpdateLiveViewImageAsync(null);
-            }
-        }
-        catch
-        {
-            // ignored
-        }
-    }
-
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        StartLiveViewLoop();
         // ApplyLiveViewCardState();
 
         TopToolbar.SizeChanged += OnTopToolbarSizeChanged;
@@ -2509,27 +2482,20 @@ public partial class TaskQueueView : UserControl
         LanguageHelper.LanguageChanged -= OnLanguageChanged;
         LanguageHelper.LanguageChanged += OnLanguageChanged;
 
-        if (Instances.TaskQueueViewModel != null)
-        {
-            Instances.TaskQueueViewModel.PropertyChanged -= OnTaskQueueViewModelPropertyChanged;
-            Instances.TaskQueueViewModel.PropertyChanged += OnTaskQueueViewModelPropertyChanged;
-            Instances.TaskQueueViewModel.LiveViewRefreshRateChanged -= OnLiveViewRefreshRateChanged;
-            Instances.TaskQueueViewModel.LiveViewRefreshRateChanged += OnLiveViewRefreshRateChanged;
-        }
+        UpdateViewModelSubscription(DataContext as TaskQueueViewModel);
+    }
+
+    private void OnSetOptionRequested(DragItemViewModel item, bool value)
+    {
+        SetOption(item, value);
     }
 
 // 在 UserControl 卸载时停止定时器
     private void OnUnloaded(object? sender, RoutedEventArgs e)
     {
-        StopLiveViewLoop();
         TopToolbar.SizeChanged -= OnTopToolbarSizeChanged;
-        Instances.TaskQueueViewModel.PropertyChanged -= OnTaskQueueViewModelPropertyChanged;
-        Instances.TaskQueueViewModel.LiveViewRefreshRateChanged -= OnLiveViewRefreshRateChanged;
-    }
 
-    private void OnLiveViewRefreshRateChanged(double interval)
-    {
-        _liveViewTimer.Interval = Math.Max(1, interval * 1000);
+        UpdateViewModelSubscription(null);
     }
 
     #endregion

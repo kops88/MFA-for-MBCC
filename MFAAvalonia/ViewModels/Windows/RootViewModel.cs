@@ -37,7 +37,7 @@ public partial class RootViewModel : ViewModelBase
             // var minor = version.Minor >= 0 ? version.Minor : 0;
             // var patch = version.Build >= 0 ? version.Build : 0;
             // return $"v{SemVersion.Parse($"{major}.{minor}.{patch}")}";
-            return "v2.5.3"; // Hardcoded version for now, replace with dynamic versioning later
+            return "v2.8.1"; // Hardcoded version for now, replace with dynamic versioning later
         }
     }
 
@@ -62,6 +62,27 @@ public partial class RootViewModel : ViewModelBase
         || ConfigurationManager.Maa.GetValue(ConfigurationKeys.ShowHitDraw, false);
     private bool _shouldTip = true;
     [ObservableProperty] private bool _isUpdating;
+    [ObservableProperty] private bool _isConfigSwitching;
+    [ObservableProperty] private double _configSwitchProgress;
+
+    partial void OnIsConfigSwitchingChanging(bool value)
+    {
+        Console.WriteLine("状态：" + value);
+    }
+    
+    public void SetConfigSwitchingState(bool isSwitching)
+    {
+        IsConfigSwitching = isSwitching;
+        if (!isSwitching)
+        {
+            ConfigSwitchProgress = 0;
+        }
+    }
+
+    public void SetConfigSwitchProgress(double progress)
+    {
+        ConfigSwitchProgress = Math.Clamp(progress, 0, 100);
+    }
     
     [RelayCommand]
     private void TryUpdate()
@@ -69,17 +90,19 @@ public partial class RootViewModel : ViewModelBase
         TempResourceUpdateAction?.Invoke();
     }
     
-    partial void OnLockControllerChanged(bool value)
-    {
-        if (value)
+        partial void OnLockControllerChanged(bool value)
         {
-            Instances.TaskQueueViewModel.ShouldShow = (int)(MaaProcessor.Interface?.Controller?.FirstOrDefault()?.Type).ToMaaControllerTypes(Instances.TaskQueueViewModel.CurrentController);
+            var vm = Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
+            if (value && vm?.SelectedController != null)
+            {
+                vm.ShouldShow = (int)vm.SelectedController.ControllerType;
+            }
         }
-    }
 
     public void CheckDebug()
     {
-        if (IsDebugMode && _shouldTip && !MaaProcessor.Instance.IsV3)
+        var vm = Instances.InstanceTabBarViewModel.ActiveTab?.TaskQueueViewModel;
+        if (IsDebugMode && _shouldTip && vm != null && !vm.Processor.IsV3)
         {
             DispatcherHelper.PostOnMainThread(() =>
             {

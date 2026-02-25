@@ -1,4 +1,6 @@
-﻿namespace MFAAvalonia.Configuration;
+﻿using System.Collections.Generic;
+
+namespace MFAAvalonia.Configuration;
 
 public static class ConfigurationKeys
 {
@@ -40,6 +42,7 @@ public static class ConfigurationKeys
     public const string UseDirectML = "UseDirectML";
     public const string GPUOption = "GPUOption";
     public const string GPUs = "GPUs";
+    public const string PreventSleep = "PreventSleep";
 
     #endregion
 
@@ -55,8 +58,13 @@ public static class ConfigurationKeys
     public const string AllowAdbRestart = "AllowAdbRestart";
     public const string AllowAdbHardRestart = "AllowAdbHardRestart";
     public const string RetryOnDisconnected = "RetryOnDisconnected";
+    public const string RetryOnDisconnectedWin32 = "RetryOnDisconnectedWin32";
     public const string AutoDetectOnConnectionFailed = "AutoDetectOnConnectionFailed";
+    public const string AutoConnectAfterRefresh = "AutoConnectAfterRefresh";
+    public const string AgentTcpMode = "AgentTcpMode";
     public const string AdbDevice = "AdbDevice";
+    public const string DesktopWindowClassName = "DesktopWindowClassName";
+    public const string DesktopWindowName = "DesktopWindowName";
     public const string PlayCoverConfig = "PlayCoverConfig";
     public const string CurrentController = "CurrentController";
 
@@ -135,6 +143,9 @@ public static class ConfigurationKeys
     public const string ExternalNotificationCustomWebhookUrl = "ExternalNotificationCustomWebhookUrl";
     public const string ExternalNotificationCustomWebhookContentType = "ExternalNotificationCustomWebhookContentType";
     public const string ExternalNotificationCustomWebhookPayloadTemplate = "ExternalNotificationCustomWebhookPayloadTemplate";
+    public const string ExternalNotificationEnableCustomMessage = "ExternalNotificationEnableCustomMessage";
+    public const string ExternalNotificationCustomSuccessText = "ExternalNotificationCustomSuccessText";
+    public const string ExternalNotificationCustomFailureText = "ExternalNotificationCustomFailureText";
 
     #endregion
 
@@ -172,6 +183,70 @@ public static class ConfigurationKeys
     public const string MainWindowPositionX = "UI.MainWindow.PositionX";
     public const string MainWindowPositionY = "UI.MainWindow.PositionY";
     public const string MainWindowMaximized = "UI.MainWindow.Maximized";
+    public const string HasCompletedFirstUseTutorial = "UI.HasCompletedFirstUseTutorial";
+
+    #endregion
+
+    #region 实例设置
+
+    public static readonly HashSet<string> InstanceScopedKeys = new()
+    {
+        TaskItems,
+        CurrentTasks,
+        ResourceOptionItems,
+        BeforeTask,
+        AfterTask,
+        SoftwarePath,
+        WaitSoftwareTime,
+        EmulatorConfig,
+        RememberAdb,
+        UseFingerprintMatching,
+        AdbControlScreenCapType,
+        AdbControlInputType,
+        Win32ControlScreenCapType,
+        Win32ControlMouseType,
+        Win32ControlKeyboardType,
+        AllowAdbRestart,
+        AllowAdbHardRestart,
+        RetryOnDisconnected,
+        RetryOnDisconnectedWin32,
+        AutoDetectOnConnectionFailed,
+        AutoConnectAfterRefresh,
+        AdbDevice,
+        DesktopWindowClassName,
+        DesktopWindowName,
+        PlayCoverConfig,
+        CurrentController,
+        Resource,
+        EnableLiveView,
+        LiveViewRefreshRate,
+        Prescript,
+        Postscript,
+        ContinueRunningWhenError,
+        UseSeparateScreenshotTasker,
+        AgentTcpMode
+    };
+
+    public static bool IsInstanceScoped(string key) => InstanceScopedKeys.Contains(key);
+
+    #endregion
+
+    #region 多实例管理
+
+    /// <summary>实例ID列表（逗号分隔）</summary>
+    public const string InstanceList = "Instances.List";
+
+    /// <summary>实例显示顺序（逗号分隔的ID）</summary>
+    public const string InstanceOrder = "Instances.Order";
+
+    /// <summary>最后激活的实例ID</summary>
+    public const string LastActiveInstance = "Instances.LastActive";
+
+    /// <summary>实例名称（存储在各实例独立 JSON 中）</summary>
+    public const string InstanceName = "InstanceName";
+
+    /// <summary>实例名称模板（旧格式，用于从全局配置迁移）：Instance.{id}.Name</summary>
+    public const string InstanceNameTemplate = "Instance.{0}.Name";
 
     #endregion
 }

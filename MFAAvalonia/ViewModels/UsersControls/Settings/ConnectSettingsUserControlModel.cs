@@ -2,7 +2,9 @@
 using MaaFramework.Binding;
 using MFAAvalonia.Configuration;
 using MFAAvalonia.Extensions.MaaFW;
+using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.Converters;
+using MFAAvalonia.Helper.ValueType;
 using MFAAvalonia.ViewModels.Other;
 using System.Collections.ObjectModel;
 
@@ -10,18 +12,76 @@ namespace MFAAvalonia.ViewModels.UsersControls.Settings;
 
 public partial class ConnectSettingsUserControlModel : ViewModelBase
 {
-    [ObservableProperty] private bool _rememberAdb = ConfigurationManager.Current.GetValue(ConfigurationKeys.RememberAdb, true);
+    /// <summary>
+    /// 批量同步标志，为 true 时跳过属性变更的副作用（SetTasker、写回配置等）
+    /// </summary>
+    public bool IsSyncing { get; set; }
+
+    /// <summary>
+    /// 构造完成后从当前实例配置重新同步所有属性。
+    /// 字段初始化器可能在 MaaProcessorManager.Current 还是 "default" 时就已执行，
+    /// 导致枚举类型属性（截图模式、触控模式）被错误地设为 Instance.default 的值。
+    /// 此处在 IsSyncing 保护下重新读取，确保值来自正确的实例配置且不触发副作用。
+    /// </summary>
+    protected override void Initialize()
+    {
+        IsSyncing = true;
+        try
+        {
+            var config = ConfigurationManager.CurrentInstance;
+            CurrentControllerType = config.GetValue(ConfigurationKeys.CurrentController,
+                MaaControllerTypes.Adb, MaaControllerTypes.None, new UniversalEnumConverter<MaaControllerTypes>());
+            RememberAdb = config.GetValue(ConfigurationKeys.RememberAdb, true);
+            UseFingerprintMatching = config.GetValue(ConfigurationKeys.UseFingerprintMatching, true);
+            AdbControlScreenCapType = config.GetValue(ConfigurationKeys.AdbControlScreenCapType,
+                AdbScreencapMethods.None, [AdbScreencapMethods.All, AdbScreencapMethods.Default],
+                new UniversalEnumConverter<AdbScreencapMethods>());
+            AdbControlInputType = config.GetValue(ConfigurationKeys.AdbControlInputType,
+                AdbInputMethods.None, [AdbInputMethods.All, AdbInputMethods.Default],
+                new UniversalEnumConverter<AdbInputMethods>());
+            Win32ControlScreenCapType = config.GetValue(ConfigurationKeys.Win32ControlScreenCapType,
+                Win32ScreencapMethod.FramePool, Win32ScreencapMethod.None,
+                new UniversalEnumConverter<Win32ScreencapMethod>());
+            Win32ControlMouseType = config.GetValue(ConfigurationKeys.Win32ControlMouseType,
+                Win32InputMethod.SendMessage, Win32InputMethod.None,
+                new UniversalEnumConverter<Win32InputMethod>());
+            Win32ControlKeyboardType = config.GetValue(ConfigurationKeys.Win32ControlKeyboardType,
+                Win32InputMethod.SendMessage, Win32InputMethod.None,
+                new UniversalEnumConverter<Win32InputMethod>());
+            RetryOnDisconnected = config.GetValue(ConfigurationKeys.RetryOnDisconnected, false);
+            RetryOnDisconnectedWin32 = config.GetValue(ConfigurationKeys.RetryOnDisconnectedWin32, false);
+            AllowAdbRestart = config.GetValue(ConfigurationKeys.AllowAdbRestart, true);
+            AllowAdbHardRestart = config.GetValue(ConfigurationKeys.AllowAdbHardRestart, true);
+            AutoDetectOnConnectionFailed = config.GetValue(ConfigurationKeys.AutoDetectOnConnectionFailed, true);
+            AutoConnectAfterRefresh = config.GetValue(ConfigurationKeys.AutoConnectAfterRefresh, true);
+            AgentTcpMode = config.GetValue(ConfigurationKeys.AgentTcpMode, false);
+        }
+        finally
+        {
+            IsSyncing = false;
+        }
+    }
+
+    /// <summary>
+    /// 当前控制器类型，用于连接设置页面 ADB/Win32 卡片可见性切换
+    /// </summary>
+    [ObservableProperty] private MaaControllerTypes _currentControllerType =
+        ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.CurrentController, MaaControllerTypes.Adb, MaaControllerTypes.None, new UniversalEnumConverter<MaaControllerTypes>());
+
+    [ObservableProperty] private bool _rememberAdb = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RememberAdb, true);
 
     partial void OnRememberAdbChanged(bool value)
     {
-        ConfigurationManager.Current.SetValue(ConfigurationKeys.RememberAdb, value);
+        if (IsSyncing) return;
+        ConfigurationManager.CurrentInstance.SetValue(ConfigurationKeys.RememberAdb, value);
     }
 
-    [ObservableProperty] private bool _useFingerprintMatching = ConfigurationManager.Current.GetValue(ConfigurationKeys.UseFingerprintMatching, true);
+    [ObservableProperty] private bool _useFingerprintMatching = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.UseFingerprintMatching, true);
 
     partial void OnUseFingerprintMatchingChanged(bool value)
     {
-        ConfigurationManager.Current.SetValue(ConfigurationKeys.UseFingerprintMatching, value);
+        if (IsSyncing) return;
+        ConfigurationManager.CurrentInstance.SetValue(ConfigurationKeys.UseFingerprintMatching, value);
     }
 
     public static ObservableCollection<LocalizationViewModel> AdbControlScreenCapTypes =>
@@ -94,40 +154,99 @@ public partial class ConnectSettingsUserControlModel : ViewModelBase
     ];
 
     [ObservableProperty] private AdbScreencapMethods _adbControlScreenCapType =
-        ConfigurationManager.Current.GetValue(ConfigurationKeys.AdbControlScreenCapType, AdbScreencapMethods.None, [AdbScreencapMethods.All, AdbScreencapMethods.Default], new UniversalEnumConverter<AdbScreencapMethods>());
+        ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AdbControlScreenCapType, AdbScreencapMethods.None, [AdbScreencapMethods.All, AdbScreencapMethods.Default], new UniversalEnumConverter<AdbScreencapMethods>());
     [ObservableProperty] private AdbInputMethods _adbControlInputType =
-        ConfigurationManager.Current.GetValue(ConfigurationKeys.AdbControlInputType, AdbInputMethods.None, [AdbInputMethods.All, AdbInputMethods.Default], new UniversalEnumConverter<AdbInputMethods>());
+        ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AdbControlInputType, AdbInputMethods.None, [AdbInputMethods.All, AdbInputMethods.Default], new UniversalEnumConverter<AdbInputMethods>());
     [ObservableProperty] private Win32ScreencapMethod _win32ControlScreenCapType =
-        ConfigurationManager.Current.GetValue(ConfigurationKeys.Win32ControlScreenCapType, Win32ScreencapMethod.FramePool, Win32ScreencapMethod.None, new UniversalEnumConverter<Win32ScreencapMethod>());
+        ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32ControlScreenCapType, Win32ScreencapMethod.FramePool, Win32ScreencapMethod.None, new UniversalEnumConverter<Win32ScreencapMethod>());
     [ObservableProperty] private Win32InputMethod _win32ControlMouseType =
-        ConfigurationManager.Current.GetValue(ConfigurationKeys.Win32ControlMouseType, Win32InputMethod.SendMessage, Win32InputMethod.None, new UniversalEnumConverter<Win32InputMethod>());
+        ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32ControlMouseType, Win32InputMethod.SendMessage, Win32InputMethod.None, new UniversalEnumConverter<Win32InputMethod>());
     [ObservableProperty] private Win32InputMethod _win32ControlKeyboardType =
-        ConfigurationManager.Current.GetValue(ConfigurationKeys.Win32ControlKeyboardType, Win32InputMethod.SendMessage, Win32InputMethod.None, new UniversalEnumConverter<Win32InputMethod>());
+        ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.Win32ControlKeyboardType, Win32InputMethod.SendMessage, Win32InputMethod.None, new UniversalEnumConverter<Win32InputMethod>());
 
-    partial void OnAdbControlScreenCapTypeChanged(AdbScreencapMethods value) => HandlePropertyChanged(ConfigurationKeys.AdbControlScreenCapType, value.ToString(), () => MaaProcessor.Instance.SetTasker());
+    partial void OnAdbControlScreenCapTypeChanged(AdbScreencapMethods value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.AdbControlScreenCapType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+    }
 
-    partial void OnAdbControlInputTypeChanged(AdbInputMethods value) => HandlePropertyChanged(ConfigurationKeys.AdbControlInputType, value.ToString(), () => MaaProcessor.Instance.SetTasker());
+    partial void OnAdbControlInputTypeChanged(AdbInputMethods value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.AdbControlInputType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+    }
 
-    partial void OnWin32ControlScreenCapTypeChanged(Win32ScreencapMethod value) => HandlePropertyChanged(ConfigurationKeys.Win32ControlScreenCapType, value.ToString(), () => MaaProcessor.Instance.SetTasker());
+    partial void OnWin32ControlScreenCapTypeChanged(Win32ScreencapMethod value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.Win32ControlScreenCapType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+    }
 
-    partial void OnWin32ControlMouseTypeChanged(Win32InputMethod value) => HandlePropertyChanged(ConfigurationKeys.Win32ControlMouseType, value.ToString(), () => MaaProcessor.Instance.SetTasker());
+    partial void OnWin32ControlMouseTypeChanged(Win32InputMethod value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.Win32ControlMouseType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+    }
 
-    partial void OnWin32ControlKeyboardTypeChanged(Win32InputMethod value) => HandlePropertyChanged(ConfigurationKeys.Win32ControlKeyboardType, value.ToString(), () => MaaProcessor.Instance.SetTasker());
+    partial void OnWin32ControlKeyboardTypeChanged(Win32InputMethod value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.Win32ControlKeyboardType, value.ToString(), () => MaaProcessorManager.Instance.Current.SetTasker());
+    }
 
-    [ObservableProperty] private bool _retryOnDisconnected = ConfigurationManager.Current.GetValue(ConfigurationKeys.RetryOnDisconnected, false);
+    [ObservableProperty] private bool _retryOnDisconnected = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RetryOnDisconnected, false);
 
-    partial void OnRetryOnDisconnectedChanged(bool value) => HandlePropertyChanged(ConfigurationKeys.RetryOnDisconnected, value);
+    partial void OnRetryOnDisconnectedChanged(bool value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.RetryOnDisconnected, value);
+    }
 
-    [ObservableProperty] private bool _allowAdbRestart = ConfigurationManager.Current.GetValue(ConfigurationKeys.AllowAdbRestart, true);
+    [ObservableProperty] private bool _retryOnDisconnectedWin32 = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.RetryOnDisconnectedWin32, false);
 
-    partial void OnAllowAdbRestartChanged(bool value) => HandlePropertyChanged(ConfigurationKeys.AllowAdbRestart, value);
+    partial void OnRetryOnDisconnectedWin32Changed(bool value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.RetryOnDisconnectedWin32, value);
+    }
 
+    [ObservableProperty] private bool _allowAdbRestart = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AllowAdbRestart, true);
 
-    [ObservableProperty] private bool _allowAdbHardRestart = ConfigurationManager.Current.GetValue(ConfigurationKeys.AllowAdbHardRestart, true);
+    partial void OnAllowAdbRestartChanged(bool value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.AllowAdbRestart, value);
+    }
 
-    partial void OnAllowAdbHardRestartChanged(bool value) => HandlePropertyChanged(ConfigurationKeys.AllowAdbHardRestart, value);
+    [ObservableProperty] private bool _allowAdbHardRestart = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AllowAdbHardRestart, true);
 
-    [ObservableProperty] private bool _autoDetectOnConnectionFailed = ConfigurationManager.Current.GetValue(ConfigurationKeys.AutoDetectOnConnectionFailed, true);
+    partial void OnAllowAdbHardRestartChanged(bool value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.AllowAdbHardRestart, value);
+    }
 
-    partial void OnAutoDetectOnConnectionFailedChanged(bool value) => HandlePropertyChanged(ConfigurationKeys.AutoDetectOnConnectionFailed, value);
+    [ObservableProperty] private bool _autoDetectOnConnectionFailed = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AutoDetectOnConnectionFailed, true);
+
+    partial void OnAutoDetectOnConnectionFailedChanged(bool value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.AutoDetectOnConnectionFailed, value);
+    }
+
+    [ObservableProperty] private bool _autoConnectAfterRefresh = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AutoConnectAfterRefresh, true);
+
+    partial void OnAutoConnectAfterRefreshChanged(bool value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.AutoConnectAfterRefresh, value);
+    }
+
+    [ObservableProperty] private bool _agentTcpMode = ConfigurationManager.CurrentInstance.GetValue(ConfigurationKeys.AgentTcpMode, false);
+
+    partial void OnAgentTcpModeChanged(bool value)
+    {
+        if (IsSyncing) return;
+        HandlePropertyChanged(ConfigurationKeys.AgentTcpMode, value);
+    }
 }

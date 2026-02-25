@@ -6,7 +6,10 @@
         xmlns:system="clr-namespace:System;assembly=netstandard"
         xmlns:theme="clr-namespace:SukiUI.Theme"
         xmlns:calcBinding="clr-namespace:CalcBinding;assembly=CalcBindingAva"
-        xmlns:animations="clr-namespace:SukiUI.Animations">
+        xmlns:animations="clr-namespace:SukiUI.Animations"
+        xmlns:avalonia="clr-namespace:FluentIcons.Avalonia;assembly=FluentIcons.Avalonia"
+        xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent;assembly=FluentIcons.Avalonia.Fluent"
+        xmlns:extensions="clr-namespace:SukiUI.Extensions">
 
     <Design.PreviewWith>
         <Border Padding="20" Background="Transparent">
@@ -156,19 +159,34 @@
                                                     BorderThickness="1,1,1,1"
                                                     BoxShadow="{DynamicResource SukiSmallPopupShadow}"
                                                     CornerRadius="{DynamicResource SmallCornerRadius}">
-                                                <Panel Background="{DynamicResource PopupGradientBrush}">
+                                                <Grid Background="{DynamicResource PopupGradientBrush}">
                                                     <suki:GlassCard Margin="-1"
                                                                     CornerRadius="{DynamicResource SmallCornerRadius}"
                                                                     IsAnimated="False" />
-                                                    <ScrollViewer
-                                                        HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
-                                                        VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}">
+                                                    <Grid RowDefinitions="Auto,*">
+                                                        <!-- 搜索框，根据CanSearch附加属性显示 -->
+                                                        <TextBox Grid.Row="0" Name="PART_SearchBox"
+                                                                 Margin="4"
+                                                                 Watermark="{TemplateBinding extensions:ComboBoxExtensions.SearchWatermark}"
+                                                                 IsVisible="{TemplateBinding extensions:ComboBoxExtensions.CanSearch}">
+                                                            <TextBox.InnerRightContent>
+                                                                <fluent:FluentIcon Margin="0 -2 0 0" VerticalAlignment="Center"
+                                                                    Foreground="{DynamicResource SukiDisabledText}"
+                                                                    Icon="Search"
+                                                                    IconSize="Size16" />
+                                                            </TextBox.InnerRightContent>
+                                                        </TextBox>
+                                                        <ScrollViewer Grid.Row="1"
+                                                            MaxHeight="{calcBinding:Binding 'MaxDropDownHeight - 60', RelativeSource={RelativeSource TemplatedParent}}"
+                                                            HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                                                            VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}">
 
-                                                        <ItemsPresenter Name="PART_ItemsPresenter"
-                                                                        Margin="0,3,0,0"
-                                                                        ItemsPanel="{TemplateBinding ItemsPanel}" />
-                                                    </ScrollViewer>
-                                                </Panel>
+                                                            <ItemsPresenter Name="PART_ItemsPresenter"
+                                                                            Margin="0,3,0,3"
+                                                                            ItemsPanel="{TemplateBinding ItemsPanel}" />
+                                                        </ScrollViewer>
+                                                    </Grid>
+                                                </Grid>
                                             </Border>
                                         </Panel>
                                     </Border>
